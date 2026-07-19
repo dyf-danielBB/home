@@ -144,8 +144,8 @@ test("Homepage 配置完整、可只读加载且不包含敏感字段", async ()
   assert.deepEqual(docker, {});
   assert.deepEqual(kubernetes, { mode: "disabled" });
   assert.deepEqual(proxmox, {});
-  assert.equal(customCss, "");
-  assert.equal(customJs, "");
+  assert.ok(customCss.trim(), "custom.css 必须存在且由 N2 主题契约验证内容");
+  assert.ok(customJs.trim(), "custom.js 必须存在且由 N2 脚本契约验证内容");
 
   const configValues = configFiles.map((path) => parseYaml(path));
   const compose = parseYaml("apps/nav/compose.yml");

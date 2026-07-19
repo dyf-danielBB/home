@@ -1,0 +1,7 @@
+:80 {
+  basic_auth {
+    {$NAV_USERNAME} {$NAV_PASSWORD_HASH}
+  }
+
+  reverse_proxy dlc-nav:3000
+}
