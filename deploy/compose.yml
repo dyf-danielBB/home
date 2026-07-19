@@ -29,6 +29,7 @@ services:
     volumes:
       - ../apps/nav/config:/app/config:ro
       - ../apps/nav/config/icons:/app/public/icons:ro
+      - dlc-nav-logs:/app/config/logs
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/healthcheck || exit 1"]
@@ -49,7 +50,7 @@ services:
       NAV_USERNAME: "${NAV_USERNAME:?请设置 NAV_USERNAME}"
       NAV_PASSWORD_HASH: "${NAV_PASSWORD_HASH:?请设置 NAV_PASSWORD_HASH}"
     ports:
-      - "${NAV_AUTH_PORT:-3105}:80"
+      - "${NAV_AUTH_BIND_ADDRESS:-127.0.0.1}:${NAV_AUTH_PORT:-3105}:80"
     volumes:
       - ./auth/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
@@ -67,3 +68,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  dlc-nav-logs:

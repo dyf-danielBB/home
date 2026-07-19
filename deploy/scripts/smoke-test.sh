@@ -63,6 +63,8 @@ esac
 deploy_directory=$(CDPATH= cd "$script_directory/.." && pwd -P) ||
   fail "无法定位 deploy 目录"
 environment_file=$deploy_directory/.env
+runtime_nav_password=${NAV_PASSWORD:-}
+unset NAV_PASSWORD
 
 require_positive_decimal SMOKE_MAX_ATTEMPTS "$SMOKE_MAX_ATTEMPTS"
 require_positive_decimal SMOKE_COMMAND_TIMEOUT "$SMOKE_COMMAND_TIMEOUT"
@@ -77,6 +79,19 @@ command -v docker >/dev/null 2>&1 ||
 [ -f "$environment_file" ] ||
   fail "缺少 $environment_file；请先在 NAS 配置 deploy/.env"
 
+while IFS= read -r environment_line || [ -n "$environment_line" ]; do
+  normalized_line=$environment_line
+  while [ "${normalized_line# }" != "$normalized_line" ] || [ "${normalized_line#	}" != "$normalized_line" ]; do
+    normalized_line=${normalized_line#?}
+  done
+  case $normalized_line in
+    export[[:space:]]NAV_PASSWORD=*|NAV_PASSWORD=*)
+      fail "deploy/.env 不得保存 NAV_PASSWORD 明文；请通过进程环境传入或使用交互输入"
+      ;;
+  esac
+done < "$environment_file"
+unset environment_line normalized_line
+
 # shellcheck disable=SC1090
 . "$environment_file"
 
@@ -87,13 +102,27 @@ timeout "$SMOKE_COMMAND_TIMEOUT" docker info >/dev/null 2>&1 ||
   fail "Docker 不可用；请在 NAS 上确认 Docker 服务正常"
 
 nav_username=${NAV_USERNAME:-}
-nav_password=${NAV_PASSWORD:-}
+nav_password=${runtime_nav_password}
 nav_password_hash=${NAV_PASSWORD_HASH:-}
-unset NAV_USERNAME NAV_PASSWORD NAV_PASSWORD_HASH
+unset runtime_nav_password NAV_USERNAME NAV_PASSWORD NAV_PASSWORD_HASH
 require_value NAV_USERNAME "$nav_username"
-require_value NAV_PASSWORD "$nav_password"
 require_value NAV_PASSWORD_HASH "$nav_password_hash"
 unset nav_password_hash
+if [ -z "$nav_password" ]; then
+  [ -t 0 ] || fail "缺少 NAV_PASSWORD；请仅通过进程环境传入，或在交互终端无回显输入"
+  command -v stty >/dev/null 2>&1 || fail "无法安全读取 NAV_PASSWORD：缺少 stty"
+  saved_stty=$(stty -g) || fail "无法读取终端状态"
+  printf '%s' '请输入起始页明文密码（不会回显）：' >&2
+  stty -echo || fail "无法关闭终端回显"
+  IFS= read -r nav_password || {
+    stty "$saved_stty"
+    fail "读取 NAV_PASSWORD 失败"
+  }
+  stty "$saved_stty" || fail "无法恢复终端回显"
+  printf '\n' >&2
+  unset saved_stty
+fi
+require_value NAV_PASSWORD "$nav_password"
 command -v tr >/dev/null 2>&1 ||
   fail "未找到 tr；请在 NAS 上安装后重试"
 reject_credential_line_breaks NAV_USERNAME "$nav_username"
@@ -135,13 +164,18 @@ wait_for_http_status() {
   check_label=$2
   authentication_mode=$3
   check_url=$4
+  request_host=${5:-}
   request_attempt=1
 
   while [ "$request_attempt" -le "$SMOKE_MAX_ATTEMPTS" ]; do
     if [ "$authentication_mode" = basic ]; then
       response_status=$(printf 'user = "%s"\n' "$curl_basic_user" | \
         curl --disable --config - --silent --show-error --output /dev/null --write-out '%{http_code}' \
-          --connect-timeout 3 --max-time 10 "$check_url" 2>/dev/null) ||
+          --connect-timeout 3 --max-time 10 --header "Host: $request_host" "$check_url" 2>/dev/null) ||
+        response_status=000
+    elif [ -n "$request_host" ]; then
+      response_status=$(curl --disable --silent --show-error --output /dev/null --write-out '%{http_code}' \
+        --connect-timeout 3 --max-time 10 --header "Host: $request_host" "$check_url" 2>/dev/null) ||
         response_status=000
     else
       response_status=$(curl --disable --silent --show-error --output /dev/null --write-out '%{http_code}' \
@@ -162,7 +196,7 @@ wait_for_http_status() {
 }
 
 wait_for_http_status 200 "博客 ${blog_port}" anonymous "http://127.0.0.1:${blog_port}/"
-wait_for_http_status 401 "起始页 ${nav_auth_port} 匿名访问" anonymous "http://127.0.0.1:${nav_auth_port}/"
-wait_for_http_status 200 "认证访问 ${nav_auth_port}" basic "http://127.0.0.1:${nav_auth_port}/"
+wait_for_http_status 401 "起始页 ${nav_auth_port} 匿名访问" anonymous "http://127.0.0.1:${nav_auth_port}/" "nav.dailecheng.xyz"
+wait_for_http_status 200 "认证访问 ${nav_auth_port}" basic "http://127.0.0.1:${nav_auth_port}/" "nav.dailecheng.xyz"
 
 printf '%s\n' 'NAS 第一阶段冒烟验收通过。'

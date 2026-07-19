@@ -2,6 +2,7 @@
 title: "你好，DLC 空间"
 description: "用一篇短文认识 DLC 博客的 Markdown 阅读体验。"
 date: "2026-07-18"
+tags: ["开始", "Markdown"]
 ---
 
 # 你好，DLC 空间

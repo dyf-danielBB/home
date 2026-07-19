@@ -96,16 +96,22 @@ function assertSafeEnvironmentCopy(readme) {
 function assertSafeRollback(readme) {
   const assignment = "STABLE_COMMIT='REPLACE_WITH_STABLE_COMMIT_SHA'";
   const verification = 'git rev-parse --verify "${STABLE_COMMIT}^{commit}"';
+  const worktree = 'git worktree add --detach "$ROLLBACK_CHECKOUT" "$STABLE_COMMIT"';
+  const targetConfig = 'docker compose --env-file "$CURRENT_DEPLOY/.env" -f compose.yml config --quiet';
   const stop = "docker compose --env-file .env -f compose.yml down";
   const switchCommit = 'git switch --detach "$STABLE_COMMIT"';
   const assignmentIndex = readme.indexOf(assignment);
   const verificationIndex = readme.indexOf(verification);
+  const worktreeIndex = readme.indexOf(worktree);
+  const targetConfigIndex = readme.indexOf(targetConfig);
   const stopIndex = readme.indexOf(stop);
   const switchIndex = readme.indexOf(switchCommit);
 
   assert.ok(assignmentIndex >= 0, "回退命令必须先设置稳定提交变量");
   assert.ok(verificationIndex > assignmentIndex, "停止服务前必须验证稳定提交");
-  assert.ok(stopIndex > verificationIndex, "只有稳定提交验证通过后才能停止服务");
+  assert.ok(worktreeIndex > verificationIndex, "必须在独立 worktree 检查目标提交");
+  assert.ok(targetConfigIndex > worktreeIndex, "必须在停止服务前验证目标 Compose");
+  assert.ok(stopIndex > targetConfigIndex, "只有目标文件、Compose 与构建验证通过后才能停止服务");
   assert.ok(switchIndex > stopIndex, "停止服务后必须使用已验证变量切换提交");
   assert.match(readme.slice(verificationIndex, stopIndex), /exit 1/, "提交验证失败时必须退出");
   assert.doesNotMatch(readme, /<上一稳定提交>/, "不得使用会被 shell 解释为重定向的裸占位");
@@ -114,8 +120,9 @@ function assertSafeRollback(readme) {
 test("总 Compose 只编排博客、起始页与认证网关", () => {
   const compose = parseYaml(composePath);
 
-  assertExactKeys(compose, ["services"], "Compose 顶层");
+  assertExactKeys(compose, ["services", "volumes"], "Compose 顶层");
   assert.deepEqual(Object.keys(compose.services).sort(), ["dlc-blog", "dlc-nav", "dlc-nav-auth"]);
+  assert.deepEqual(compose.volumes, { "dlc-nav-logs": null });
   assert.doesNotMatch(JSON.stringify(compose), /(?:^|[-_])(pan|web)(?:$|[-_])/i);
 });
 
@@ -138,7 +145,7 @@ test("博客构建路径、公开端口和运行策略精确固定", () => {
   assert.ok(existsSync(resolve(deployDirectory, blog.build, "Dockerfile")), "博客构建上下文必须包含 Dockerfile");
 });
 
-test("起始页复用 N1 的镜像、回环端口、只读卷和三项环境变量", () => {
+test("起始页复用 N1 的镜像、回环端口、只读配置和独立可写日志卷", () => {
   const homepage = parseYaml(composePath).services["dlc-nav"];
 
   assertExactKeys(
@@ -153,6 +160,7 @@ test("起始页复用 N1 的镜像、回环端口、只读卷和三项环境变�
   assert.deepEqual(homepage.volumes, [
     "../apps/nav/config:/app/config:ro",
     "../apps/nav/config/icons:/app/public/icons:ro",
+    "dlc-nav-logs:/app/config/logs",
   ]);
   assert.deepEqual(homepage.healthcheck, {
     test: [
@@ -189,7 +197,7 @@ test("认证网关只接收无默认值凭证并等待起始页健康", () => {
   );
   assert.equal(auth.image, "caddy:2.10.2-alpine");
   assert.equal(auth.container_name, "dlc-nav-auth");
-  assert.deepEqual(auth.ports, ["${NAV_AUTH_PORT:-3105}:80"]);
+  assert.deepEqual(auth.ports, ["${NAV_AUTH_BIND_ADDRESS:-127.0.0.1}:${NAV_AUTH_PORT:-3105}:80"]);
   assertRequiredAuthEnvironment(auth.environment);
   assert.deepEqual(auth.volumes, ["./auth/Caddyfile:/etc/caddy/Caddyfile:ro"]);
   assert.deepEqual(auth.depends_on, {
@@ -264,10 +272,13 @@ test("中文部署说明区分本地边界并覆盖 NAS 部署、检查和回退
   assertSafeEnvironmentCopy(readme);
   assert.match(readme, /NAS 待验证/);
   assert.match(readme, /docker run --rm -it caddy:2\.10\.2-alpine caddy hash-password/);
-  assert.match(readme, /docker compose --env-file \.env -f compose\.yml config/);
+  assert.match(readme, /docker compose --env-file \.env -f compose\.yml config --quiet/);
   assert.match(readme, /docker compose --env-file \.env -f compose\.yml up -d --build/);
   assert.match(readme, /docker compose --env-file \.env -f compose\.yml ps/);
   assert.match(readme, /127\.0\.0\.1:\$\{NAV_PORT:-3103\}/);
+  assert.match(readme, /NAV_AUTH_BIND_ADDRESS.*127\.0\.0\.1/s);
+  assert.match(readme, /NAV_PASSWORD=.*\.\/scripts\/smoke-test\.sh|read -s/s);
+  assert.doesNotMatch(readme, /^NAV_PASSWORD=.*\.env/m);
   assert.match(readme, /3101.*3105/s);
   assert.match(readme, /回退/);
   assertSafeRollback(readme);

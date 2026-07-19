@@ -8,5 +8,7 @@ test("DLC 品牌资源包含固定文案和色值", async () => {
     readFile("shared/branding/dlc-logo.svg", "utf8"),
   ]);
   for (const token of ["#090e19", "#111a2e", "#55d6be", "#3b82f6", "#eff6ff"]) assert.match(css, new RegExp(token));
+  assert.match(css, /--dlc-radius-card:\s*14px/);
+  assert.match(css, /--dlc-radius-panel:\s*20px/);
   assert.match(svg, />DLC</);
 });

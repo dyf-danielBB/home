@@ -58,8 +58,8 @@ function assertCaddyContract(caddyfile) {
   const siteBlock = source.slice(openingIndex + 1, closingIndex).replace(/\s+/g, " ").trim();
   assert.equal(
     siteBlock,
-    "basic_auth { {$NAV_USERNAME} {$NAV_PASSWORD_HASH} } reverse_proxy dlc-nav:3000",
-    "站点块必须先 basic_auth，再唯一 reverse_proxy 到 dlc-nav:3000",
+    "basic_auth { {$NAV_USERNAME} {$NAV_PASSWORD_HASH} } reverse_proxy dlc-nav:3000 { header_up Host nav.dailecheng.xyz }",
+    "站点块必须认证、唯一代理到 dlc-nav:3000，并传递 Homepage 允许的 Host",
   );
 
   assert.deepEqual(
@@ -128,6 +128,13 @@ test("Caddy 仅通过环境变量认证并代理到 dlc-nav", async () => {
   const caddyfile = await read("deploy/auth/Caddyfile");
 
   assertCaddyContract(caddyfile);
+});
+
+test("独立起始页 Caddy 使用同一认证与 Host 契约", async () => {
+  const caddyfile = await read("apps/nav/Caddyfile");
+  const deployContract = await read("deploy/auth/Caddyfile");
+
+  assert.equal(caddyfile, deployContract.replace("dlc-nav:3000", "homepage:3000"));
 });
 
 test("Caddy 契约拒绝 route 改序、order 和任何默认或明文凭证", () => {

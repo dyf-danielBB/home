@@ -15,6 +15,7 @@ const expectedHomepageEnvironment = {
 const expectedHomepageVolumes = [
   "./config:/app/config:ro",
   "./config/icons:/app/public/icons:ro",
+  "dlc-nav-logs:/app/config/logs",
 ];
 const sensitiveNamePattern = /(?:api[_-]?key|token|secret|password|(?:^|[_-])key(?:$|[_-]))/i;
 
@@ -95,7 +96,11 @@ function assertNoSensitiveFields({ compose, envExample, configValues }) {
       .map((name) => `apps/nav/env.example.${name}`),
     ...configValues.flatMap((value) => collectSensitiveKeys(value)),
   ];
-  assert.deepEqual(sensitiveFields, []);
+  const allowedAuthFields = new Set([
+    "compose.services.nav-auth.environment.NAV_USERNAME",
+    "compose.services.nav-auth.environment.NAV_PASSWORD_HASH",
+  ]);
+  assert.deepEqual(sensitiveFields.filter((field) => !allowedAuthFields.has(field)), []);
 }
 
 test("Compose 精确限制 Homepage 的镜像、端口、主机、配置卷与健康检查", () => {
@@ -112,6 +117,12 @@ test("Compose 精确限制 Homepage 的镜像、端口、主机、配置卷与�
     "CMD-SHELL",
     "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/healthcheck || exit 1",
   ]);
+  assert.deepEqual(compose.volumes, { "dlc-nav-logs": null });
+  const auth = compose.services["nav-auth"];
+  assert.equal(auth.image, "caddy:2.10.2-alpine");
+  assert.deepEqual(auth.ports, ["${NAV_AUTH_BIND_ADDRESS:-127.0.0.1}:${NAV_AUTH_PORT:-3105}:80"]);
+  assert.deepEqual(auth.volumes, ["./Caddyfile:/etc/caddy/Caddyfile:ro"]);
+  assert.deepEqual(auth.depends_on, { homepage: { condition: "service_healthy" } });
 });
 
 test("Compose 拒绝额外卷、非只读图标卷和 Docker Socket", () => {

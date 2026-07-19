@@ -4,8 +4,8 @@
   --dlc-primary: #55d6be;
   --dlc-accent: #3b82f6;
   --dlc-text: #eff6ff;
-  --dlc-radius-card: 20px;
-  --dlc-radius-panel: 28px;
+  --dlc-radius-card: 14px;
+  --dlc-radius-panel: 20px;
 }
 
 @media (prefers-reduced-motion: reduce) {

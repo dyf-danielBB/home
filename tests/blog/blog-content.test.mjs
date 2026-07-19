@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test, { before } from "node:test";
@@ -12,9 +14,26 @@ const readBuiltFile = (path) =>
   readFile(new URL(`../../apps/blog/dist/${path}`, import.meta.url), "utf8");
 
 before(async () => {
-  await execFileAsync("pnpm", ["--dir", "apps/blog", "build"], {
-    cwd: fileURLToPath(projectDirectory),
-  });
+  const lockDirectory = join(tmpdir(), "dlc-blog-astro-build.lock");
+  let acquired = false;
+  for (let attempt = 0; attempt < 600; attempt += 1) {
+    try {
+      await mkdir(lockDirectory);
+      acquired = true;
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  assert.ok(acquired, "等待另一个 Astro 构建结束超时");
+  try {
+    await execFileAsync("pnpm", ["--dir", "apps/blog", "build"], {
+      cwd: fileURLToPath(projectDirectory),
+    });
+  } finally {
+    await rm(lockDirectory, { recursive: true, force: true });
+  }
 });
 
 function parseFrontmatter(markdown) {
@@ -47,6 +66,7 @@ function assertRequiredFrontmatter(markdown) {
   }
 
   assert.equal(Number.isNaN(Date.parse(frontmatter.date)), false, "date must be parseable");
+  assert.match(markdown, /^tags:\s*\[[^\]]+\]$/m, "tags must be a non-empty YAML array");
 }
 
 test("uses the DLC Space title and canonical blog domain", async () => {
@@ -109,9 +129,10 @@ test("applies the complete aurora theme with light reading mode and reduced moti
 });
 
 test("builds both DLC articles, RSS entries, and canonical URLs", async () => {
-  const [about, hello, rss] = await Promise.all([
+  const [about, hello, index, rss] = await Promise.all([
     readBuiltFile("blog/about-dlc-space/index.html"),
     readBuiltFile("blog/hello-dlc-space/index.html"),
+    readBuiltFile("index.html"),
     readBuiltFile("rss.xml"),
   ]);
 
@@ -125,6 +146,35 @@ test("builds both DLC articles, RSS entries, and canonical URLs", async () => {
   );
   assert.match(rss, /<link>https:\/\/blog\.dailecheng\.xyz\/blog\/about-dlc-space\/<\/link>/);
   assert.match(rss, /<link>https:\/\/blog\.dailecheng\.xyz\/blog\/hello-dlc-space\/<\/link>/);
+  assert.match(index, /DLC 空间/);
+  assert.doesNotMatch(index, /Miniblog is|Today|Writing|Projects/);
+  assert.match(index, /#DLC/);
+  assert.match(about, /#DLC/);
+  assert.match(hello, /#开始/);
+  assert.doesNotMatch(rss, /customizing-miniblog|making-miniblog|what-is-markdown/);
+
+  const items = [...rss.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1]);
+  assert.equal(items.length, 2, "RSS 必须只公开两篇 DLC 文章");
+  const dates = items.map((item) => {
+    const value = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1];
+    assert.ok(value, "每个 RSS item 必须包含 pubDate");
+    return Date.parse(value);
+  });
+  assert.ok(dates.every(Number.isFinite), "RSS pubDate 必须可解析");
+  assert.deepEqual(dates, [...dates].sort((a, b) => b - a), "RSS 必须按日期倒序");
+});
+
+test("内容集合只包含两篇带标签的 DLC 文章，favicon 使用 DLC Logo", async () => {
+  const [schema, head] = await Promise.all([
+    readProjectFile("apps/blog/src/content.config.ts"),
+    readProjectFile("apps/blog/src/components/Head.astro"),
+  ]);
+  assert.match(schema, /tags:\s*z\.array\(z\.string\(\)\)\.min\(1\)/);
+  for (const removed of ["customizing-miniblog", "making-miniblog", "what-is-markdown"]) {
+    await assert.rejects(readProjectFile(`apps/blog/src/content/blog/${removed}.md`), /ENOENT/);
+  }
+  assert.match(head, /rel="icon"[^>]+href="\/dlc-logo\.svg"/);
+  assert.doesNotMatch(head, /favicon\.(?:svg|ico)/);
 });
 
 test("restores the saved theme synchronously at the start of the real document head", async () => {

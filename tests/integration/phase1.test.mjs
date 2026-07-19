@@ -126,7 +126,7 @@ function assertNoRealSecrets(path, text) {
         /^(?:replace|example|fixture|test)(?:[-_]|$)/i.test(value) || /^<[^>]+>$/.test(value);
       const safeCodeReference =
         path.startsWith("tests/") &&
-        /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/.test(value);
+        /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value);
       const safeTestFixture =
         path.startsWith("tests/") &&
         (/fixture/i.test(line) ||
@@ -191,7 +191,7 @@ test("博客、起始页与 Compose 关键契约可从单条本地命令验收",
   );
 
   assert.equal(stderr, "");
-  assert.equal(expectedTestCount, 39);
+  assert.equal(expectedTestCount, 41);
   assert.match(stdout, new RegExp(`tests ${expectedTestCount}\\b`));
   assert.match(stdout, /fail 0/);
   assert.match(stdout, /records the exact Miniblog upstream revision/);
@@ -233,7 +233,13 @@ test("阶段一跟踪文件不包含真实敏感信息", async () => {
   assert.ok(!trackedFiles.some((path) => basename(path) === ".env"), "不得跟踪 .env");
 
   for (const path of trackedFiles) {
-    const contents = await readFile(join(projectDirectory, path));
+    let contents;
+    try {
+      contents = await readFile(join(projectDirectory, path));
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
     if (contents.includes(0)) continue;
     assertNoRealSecrets(path, contents.toString("utf8"));
   }
@@ -312,7 +318,6 @@ test("NAS 冒烟脚本安全处理本地、配置和凭证缺失", async () => {
       env: [
         environmentLine,
         "NAV_USERNAME=smoke-user",
-        "NAV_PASSWORD=fixture-password",
         "NAV_PASSWORD_HASH=fixture-hash",
         "",
       ].join("\n"),
@@ -337,9 +342,8 @@ test("NAS 冒烟脚本安全处理本地、配置和凭证缺失", async () => {
     const invalidCredential = await makeSmokeFixture({
       env: [
         "NAV_USERNAME=smoke-user",
-        "NAV_PASSWORD=fixture-password",
         "NAV_PASSWORD_HASH=fixture-hash",
-        `${variable}='${value}'`,
+        ...(variable === "NAV_USERNAME" ? [`${variable}='${value}'`] : []),
         "",
       ].join("\n"),
     });
@@ -350,7 +354,10 @@ test("NAS 冒烟脚本安全处理本地、配置和凭证缺失", async () => {
       '#!/bin/sh\nprintf "%s\\n" curl-called >> "$SMOKE_TEST_LOG"\nexit 1\n',
     );
     await writeExecutable(join(invalidCredential.binDirectory, "tr"), '#!/bin/sh\nexec /usr/bin/tr "$@"\n');
-    const result = await runSmoke(invalidCredential);
+    const result = await runSmoke(
+      invalidCredential,
+      variable === "NAV_PASSWORD" ? { NAV_PASSWORD: value } : { NAV_PASSWORD: "fixture-password" },
+    );
     assert.notEqual(result.status, 0);
     assert.match(`${result.stdout}${result.stderr}`, new RegExp(`${variable}.*(?:CR|LF|回车|换行)`));
     assert.doesNotMatch(await readSmokeLog(invalidCredential), /curl-called|curl-argv/);
@@ -380,6 +387,15 @@ test("NAS 冒烟脚本安全处理本地、配置和凭证缺失", async () => {
   const noCredentialsResult = await runSmoke(noCredentials);
   assert.notEqual(noCredentialsResult.status, 0);
   assert.match(`${noCredentialsResult.stdout}${noCredentialsResult.stderr}`, /NAV_USERNAME/);
+
+  const persistedPassword = await makeSmokeFixture({
+    env: "NAV_USERNAME=smoke-user\nNAV_PASSWORD=must-not-be-persisted\nNAV_PASSWORD_HASH=fixture-hash\n",
+  });
+  await installForwardingTimeout(persistedPassword);
+  await installHealthyDocker(persistedPassword);
+  const persistedPasswordResult = await runSmoke(persistedPassword);
+  assert.notEqual(persistedPasswordResult.status, 0);
+  assert.match(`${persistedPasswordResult.stdout}${persistedPasswordResult.stderr}`, /NAV_PASSWORD.*\.env|\.env.*NAV_PASSWORD/s);
 });
 
 test("NAS 冒烟脚本检查三容器与 200、401、认证后 200", async () => {
@@ -390,7 +406,6 @@ test("NAS 冒烟脚本检查三容器与 200、401、认证后 200", async () =>
       "BLOG_PORT=3101",
       "NAV_AUTH_PORT=3105",
       "NAV_USERNAME=smoke-user",
-      `NAV_PASSWORD='${password}'`,
       `NAV_PASSWORD_HASH='${passwordHash}'`,
       "",
     ].join("\n"),
@@ -447,6 +462,7 @@ esac
   );
 
   const result = await runSmoke(fixture, {
+    NAV_PASSWORD: password,
     SMOKE_COMMAND_TIMEOUT: "7",
     SMOKE_RETRY_DELAY: "0",
     SMOKE_EXPECTED_CONFIG_FILE: fixture.expectedConfigFile,
@@ -475,8 +491,10 @@ esac
   assert.match(curlArguments[0], /--connect-timeout.*<3>.*--max-time.*<10>.*3101/);
   assert.doesNotMatch(curlArguments[0], /--config/);
   assert.match(curlArguments[1], /--connect-timeout.*<3>.*--max-time.*<10>.*3105/);
+  assert.match(curlArguments[1], /--header><Host: nav\.dailecheng\.xyz>/);
   assert.doesNotMatch(curlArguments[1], /--config/);
   assert.match(curlArguments[2], /--config><->.*--connect-timeout.*<3>.*--max-time.*<10>.*3105/);
+  assert.match(curlArguments[2], /--header><Host: nav\.dailecheng\.xyz>/);
   assert.match(calls, /curl-stdin-config:valid/);
   assert.doesNotMatch(calls, /curl-env:NAV_(?:PASSWORD|PASSWORD_HASH)/);
   assert.doesNotMatch(calls, new RegExp(`${password.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|${passwordHash}`));

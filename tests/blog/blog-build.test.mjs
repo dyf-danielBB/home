@@ -22,7 +22,11 @@ const dlcCustomizationFiles = new Set([
   "src/consts.ts",
   "src/content/blog/about-dlc-space.md",
   "src/content/blog/hello-dlc-space.md",
+  "src/content.config.ts",
   "src/layouts/Layout.astro",
+  "src/pages/blog/[...slug].astro",
+  "src/pages/index.astro",
+  "src/pages/rss.xml.js",
   "src/styles/global.css",
 ]);
 const upstreamBlobs = {
@@ -40,16 +44,9 @@ const upstreamBlobs = {
   "src/assets/blog-placeholder-1.jpg": "c4214b0e639a782769ea329846e51ec066b7976e",
   "src/assets/blog-placeholder-2.jpg": "fbe2ac0cb0c744ddfa28d406c0e90956a3398aaa",
   "src/components/Link.astro": "3ed382d64cba4a7d4d44e00206e330852db1048d",
-  "src/content.config.ts": "093284e234e330463e1d3e82f9897d9426197659",
-  "src/content/blog/customizing-miniblog.md": "0fc7400be743ef9ffae1a0f6fcbc36c555924be5",
-  "src/content/blog/making-miniblog.md": "3d2dcaa87b0e96e6972fcac4b9b35db647c11727",
-  "src/content/blog/what-is-markdown.md": "ea98f14100acb6f0e254bf9d423c1763d37bdfaa",
   "src/lib/utils.ts": "a5ef193506d07d0459fec4f187af08283094d7c8",
   "src/pages/404.astro": "bcc9ea45c9761d637d87caeb01adde9fbc720fd8",
   "src/pages/500.astro": "dd032cafd675c1ffe1fc90bcbef0952e7ae43221",
-  "src/pages/blog/[...slug].astro": "79802cdcb8e500904a7f08edd88fed1fa93d9806",
-  "src/pages/index.astro": "fac4a482aebff015ea4a903214be8702cf9d4f90",
-  "src/pages/rss.xml.js": "c4ddb92cd26b68f605955ec731ec8b9241e4f9be",
   "tsconfig.json": "0dc098dd7eaaa2de4938c719e71981b193087a1f",
 };
 
@@ -146,12 +143,12 @@ test("excludes local dependencies, build output, secrets, logs, and editor files
   }
 });
 
-test("preserves 25 untouched upstream files and the exact DLC customization surface", async () => {
+test("preserves 18 untouched upstream files and the exact DLC customization surface", async () => {
   const sourceFiles = await listSourceFiles();
   const expectedFiles = [...Object.keys(upstreamBlobs), ...dlcCustomizationFiles];
 
-  assert.equal(Object.keys(upstreamBlobs).length, 25);
-  assert.equal(dlcCustomizationFiles.size, 8);
+  assert.equal(Object.keys(upstreamBlobs).length, 18);
+  assert.equal(dlcCustomizationFiles.size, 12);
   assert.deepEqual(sourceFiles.sort(), expectedFiles.sort());
 
   for (const [file, expectedBlob] of Object.entries(upstreamBlobs)) {
