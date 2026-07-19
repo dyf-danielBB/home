@@ -46,8 +46,8 @@ services:
     container_name: dlc-nav-auth
     image: caddy:2.10.2-alpine
     environment:
-      NAV_USERNAME: "${NAV_USERNAME}"
-      NAV_PASSWORD_HASH: "${NAV_PASSWORD_HASH}"
+      NAV_USERNAME: "${NAV_USERNAME:?请设置 NAV_USERNAME}"
+      NAV_PASSWORD_HASH: "${NAV_PASSWORD_HASH:?请设置 NAV_PASSWORD_HASH}"
     ports:
       - "${NAV_AUTH_PORT:-3105}:80"
     volumes:

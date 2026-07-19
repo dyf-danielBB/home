@@ -19,6 +19,10 @@ git diff --check
 
 ```sh
 cd /volume1/docker/dlc-space/source/deploy
+test ! -e .env || {
+  echo ".env 已存在，拒绝覆盖；请先单独备份或继续使用现有文件。" >&2
+  exit 1
+}
 cp env.example .env
 chmod 600 .env
 ```
@@ -78,13 +82,19 @@ test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3105/)" = 401
 
 ## 回退
 
-先记录当前稳定提交。部署失败时，在 NAS 上停止本阶段服务，切换到上一稳定提交，再从该提交的 `deploy/` 目录重新启动：
+先把引号内的占位值替换为已经部署验证过的稳定提交 SHA。命令会先确认该提交确实存在；验证失败时保持当前服务运行，不执行回退：
 
 ```sh
-cd /volume1/docker/dlc-space/source/deploy
+cd /volume1/docker/dlc-space/source
+STABLE_COMMIT='REPLACE_WITH_STABLE_COMMIT_SHA'
+git rev-parse --verify "${STABLE_COMMIT}^{commit}" >/dev/null || {
+  echo "稳定提交无效，拒绝停止现有服务：$STABLE_COMMIT" >&2
+  exit 1
+}
+cd deploy
 docker compose --env-file .env -f compose.yml down
 cd ..
-git switch --detach <上一稳定提交>
+git switch --detach "$STABLE_COMMIT"
 cd deploy
 docker compose --env-file .env -f compose.yml up -d --build
 docker compose --env-file .env -f compose.yml ps
