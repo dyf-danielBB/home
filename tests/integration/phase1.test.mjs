@@ -191,21 +191,24 @@ test("博客、起始页与 Compose 关键契约可从单条本地命令验收",
   );
 
   assert.equal(stderr, "");
-  assert.equal(expectedTestCount, 42);
+  assert.equal(expectedTestCount, 43);
   assert.match(stdout, new RegExp(`tests ${expectedTestCount}\\b`));
   assert.match(stdout, /fail 0/);
   assert.match(stdout, /records the exact Miniblog upstream revision/);
   assert.match(stdout, /Caddy 仅通过环境变量认证并代理到 dlc-nav/);
 
-  const [about, hello, rss] = await Promise.all([
+  const [about, hello, review, rss] = await Promise.all([
     readProjectFile("apps/blog/dist/blog/about-dlc-space/index.html"),
     readProjectFile("apps/blog/dist/blog/hello-dlc-space/index.html"),
+    readProjectFile("apps/blog/dist/blog/one-hundred-years-of-solitude-review/index.html"),
     readProjectFile("apps/blog/dist/rss.xml"),
   ]);
   assert.match(about, /DLC 空间/);
   assert.match(hello, /DLC 空间/);
+  assert.match(review, /百年孤独/);
   assert.match(rss, /about-dlc-space/);
   assert.match(rss, /hello-dlc-space/);
+  assert.match(rss, /one-hundred-years-of-solitude-review/);
 });
 
 test("阶段一跟踪文件不包含真实敏感信息", async () => {

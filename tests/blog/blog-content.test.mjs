@@ -128,10 +128,11 @@ test("applies the complete aurora theme with light reading mode and reduced moti
   assert.equal(blogLogo, sharedLogo, "blog logo must exactly match the shared brand asset");
 });
 
-test("builds both DLC articles, RSS entries, and canonical URLs", async () => {
-  const [about, hello, index, rss] = await Promise.all([
+test("builds all DLC articles, RSS entries, and canonical URLs", async () => {
+  const [about, hello, review, index, rss] = await Promise.all([
     readBuiltFile("blog/about-dlc-space/index.html"),
     readBuiltFile("blog/hello-dlc-space/index.html"),
+    readBuiltFile("blog/one-hundred-years-of-solitude-review/index.html"),
     readBuiltFile("index.html"),
     readBuiltFile("rss.xml"),
   ]);
@@ -144,20 +145,30 @@ test("builds both DLC articles, RSS entries, and canonical URLs", async () => {
     hello,
     /<link rel="canonical" href="https:\/\/blog\.dailecheng\.xyz\/blog\/hello-dlc-space\/">/,
   );
+  assert.match(
+    review,
+    /<link rel="canonical" href="https:\/\/blog\.dailecheng\.xyz\/blog\/one-hundred-years-of-solitude-review\/">/,
+  );
   assert.match(rss, /<link>https:\/\/blog\.dailecheng\.xyz\/blog\/about-dlc-space\/<\/link>/);
   assert.match(rss, /<link>https:\/\/blog\.dailecheng\.xyz\/blog\/hello-dlc-space\/<\/link>/);
+  assert.match(
+    rss,
+    /<link>https:\/\/blog\.dailecheng\.xyz\/blog\/one-hundred-years-of-solitude-review\/<\/link>/,
+  );
   assert.match(index, /DLC 空间/);
   assert.doesNotMatch(index, /Miniblog is|Today|Writing|Projects/);
   assert.match(index, /#DLC/);
   assert.match(index, /href="\/blog\/about-dlc-space\/"/);
   assert.match(index, /href="\/blog\/hello-dlc-space\/"/);
+  assert.match(index, /href="\/blog\/one-hundred-years-of-solitude-review\/"/);
   assert.doesNotMatch(index, /href="\/blog\/(?:about|hello)-dlc-space"/);
   assert.match(about, /#DLC/);
   assert.match(hello, /#开始/);
+  assert.match(review, /#阅读/);
   assert.doesNotMatch(rss, /customizing-miniblog|making-miniblog|what-is-markdown/);
 
   const items = [...rss.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1]);
-  assert.equal(items.length, 2, "RSS 必须只公开两篇 DLC 文章");
+  assert.equal(items.length, 3, "RSS 必须公开三篇 DLC 文章");
   const dates = items.map((item) => {
     const value = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1];
     assert.ok(value, "每个 RSS item 必须包含 pubDate");
@@ -167,7 +178,7 @@ test("builds both DLC articles, RSS entries, and canonical URLs", async () => {
   assert.deepEqual(dates, [...dates].sort((a, b) => b - a), "RSS 必须按日期倒序");
 });
 
-test("内容集合只包含两篇带标签的 DLC 文章，favicon 使用 DLC Logo", async () => {
+test("内容集合只包含三篇带标签的 DLC 文章，favicon 使用 DLC Logo", async () => {
   const [schema, head] = await Promise.all([
     readProjectFile("apps/blog/src/content.config.ts"),
     readProjectFile("apps/blog/src/components/Head.astro"),

@@ -18,11 +18,14 @@ const blogConfigurationFiles = new Set([
 const dlcCustomizationFiles = new Set([
   "package.json",
   "public/dlc-logo.svg",
+  "public/images/blog/one-hundred-years-of-solitude/macondo-rain.webp",
+  "public/images/blog/one-hundred-years-of-solitude/parchment-butterflies.webp",
   "src/components/Head.astro",
   "src/components/Header.astro",
   "src/consts.ts",
   "src/content/blog/about-dlc-space.md",
   "src/content/blog/hello-dlc-space.md",
+  "src/content/blog/one-hundred-years-of-solitude-review.md",
   "src/content.config.ts",
   "src/layouts/Layout.astro",
   "src/pages/blog/[...slug].astro",
@@ -155,7 +158,7 @@ test("preserves 17 untouched upstream files and the exact DLC customization surf
   const expectedFiles = [...Object.keys(upstreamBlobs), ...dlcCustomizationFiles];
 
   assert.equal(Object.keys(upstreamBlobs).length, 17);
-  assert.equal(dlcCustomizationFiles.size, 13);
+  assert.equal(dlcCustomizationFiles.size, 16);
   assert.deepEqual(sourceFiles.sort(), expectedFiles.sort());
 
   for (const [file, expectedBlob] of Object.entries(upstreamBlobs)) {
@@ -173,4 +176,28 @@ test("contains no nested Git metadata or gitlinks", async () => {
 
   assert.ok(!entries.some((entry) => entry === ".git" || entry.endsWith("/.git")));
   assert.doesNotMatch(stdout, /^160000\s/m);
+});
+
+test("publishes the 百年孤独 review with stable metadata and two original images", async () => {
+  const article = await readBlogFile("src/content/blog/one-hundred-years-of-solitude-review.md");
+
+  assert.match(article, /^title: "在时间的圆环里，读懂孤独——《百年孤独》读后感"$/m);
+  assert.match(article, /^date: "2026-07-19"$/m);
+  assert.match(article, /^tags: \["阅读", "文学"\]$/m);
+  assert.match(
+    article,
+    /\/images\/blog\/one-hundred-years-of-solitude\/macondo-rain\.webp/,
+  );
+  assert.match(
+    article,
+    /\/images\/blog\/one-hundred-years-of-solitude\/parchment-butterflies\.webp/,
+  );
+
+  for (const image of [
+    "public/images/blog/one-hundred-years-of-solitude/macondo-rain.webp",
+    "public/images/blog/one-hundred-years-of-solitude/parchment-butterflies.webp",
+  ]) {
+    const contents = await readFile(new URL(image, blogDirectory));
+    assert.ok(contents.byteLength > 10_000, `${image} is unexpectedly small`);
+  }
 });
