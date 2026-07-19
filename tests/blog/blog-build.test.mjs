@@ -16,6 +16,7 @@ const blogConfigurationFiles = new Set([
   "compose.yml",
 ]);
 const dlcCustomizationFiles = new Set([
+  "package.json",
   "public/dlc-logo.svg",
   "src/components/Head.astro",
   "src/components/Header.astro",
@@ -37,7 +38,6 @@ const upstreamBlobs = {
   LICENSE: "9b6046a6d660b85051028a9c64de8a38f0400d76",
   "README.md": "0636812465e3673af166a3a3fe53c8724fcc59bf",
   "astro.config.mjs": "c583ea997d2eebd18a9ede88f3bb381f559cab6f",
-  "package.json": "69014654d4119205fafc4dedb6836313d416d7c7",
   "pnpm-lock.yaml": "47e00a1b80354a652bb47939c67064f9486a1b15",
   "public/favicon.ico": "7f48a94d16071d6c8d06478c7458ab12e675019c",
   "public/favicon.svg": "f157bd1c5e287c70a508a98a13f538491aa4dafc",
@@ -99,6 +99,13 @@ test("uses exact pinned build and runtime images without latest", async () => {
   assert.doesNotMatch(dockerfile, /:latest\b/);
 });
 
+test("pins pnpm and permits only the native build scripts required by Astro", async () => {
+  const packageJson = JSON.parse(await readBlogFile("package.json"));
+
+  assert.match(packageJson.packageManager, /^pnpm@\d+\.\d+\.\d+$/);
+  assert.deepEqual(packageJson.pnpm?.onlyBuiltDependencies, ["esbuild", "sharp"]);
+});
+
 test("defines the dlc-blog service, public port, and root health check", async () => {
   const compose = await readBlogFile("compose.yml");
 
@@ -143,12 +150,12 @@ test("excludes local dependencies, build output, secrets, logs, and editor files
   }
 });
 
-test("preserves 18 untouched upstream files and the exact DLC customization surface", async () => {
+test("preserves 17 untouched upstream files and the exact DLC customization surface", async () => {
   const sourceFiles = await listSourceFiles();
   const expectedFiles = [...Object.keys(upstreamBlobs), ...dlcCustomizationFiles];
 
-  assert.equal(Object.keys(upstreamBlobs).length, 18);
-  assert.equal(dlcCustomizationFiles.size, 12);
+  assert.equal(Object.keys(upstreamBlobs).length, 17);
+  assert.equal(dlcCustomizationFiles.size, 13);
   assert.deepEqual(sourceFiles.sort(), expectedFiles.sort());
 
   for (const [file, expectedBlob] of Object.entries(upstreamBlobs)) {
