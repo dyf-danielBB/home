@@ -7,6 +7,7 @@
         :key="item.name"
         :href="item.url"
         target="_blank"
+        @click="handleClick($event, item)"
         @mouseenter="socialTip = item.tip"
         @mouseleave="socialTip = '通过这里联系我吧'"
       >
@@ -22,6 +23,18 @@ import socialLinks from "@/assets/socialLinks.json";
 
 // 社交链接提示
 const socialTip = ref("通过这里联系我吧");
+
+const handleClick = async (event, item) => {
+  if (item.action !== "copy") return;
+  event.preventDefault();
+  try {
+    await navigator.clipboard.writeText(item.copyText);
+    ElMessage.success("微信号已复制");
+  } catch (error) {
+    console.error("微信号复制失败：", error);
+    ElMessage.info(item.copyText);
+  }
+};
 </script>
 
 <style lang="scss" scoped>
