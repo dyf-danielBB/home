@@ -1,6 +1,60 @@
-<header class="mb-24 leading-snug [&_p]:my-0">
-  <p>
-    <a class="font-medium no-underline" href="/">Miniblog</a>
-  </p>
-  <p class="text-muted-foreground">A minimal Astro blog template.</p>
+<header class="site-header mb-16">
+  <a class="brand-link no-underline" href="/" aria-label="DLC 空间博客首页">
+    <img src="/dlc-logo.svg" alt="DLC 空间" width="44" height="44" />
+    <span>DLC 空间</span>
+  </a>
+
+  <nav class="site-nav" aria-label="主要导航">
+    <a href="/">博客</a>
+    <a href="/blog/about-dlc-space">关于</a>
+    <button
+      id="theme-toggle"
+      class="theme-toggle"
+      type="button"
+      aria-label="切换到浅色阅读模式"
+      aria-pressed="false"
+    >
+      <span aria-hidden="true">◐</span>
+      <span class="theme-toggle-label">浅色</span>
+    </button>
+  </nav>
 </header>
+
+<script>
+  const storageKey = "dlc-blog-theme";
+  const root = document.documentElement;
+  const themeToggle =
+    document.querySelector<HTMLButtonElement>("#theme-toggle");
+  const themeLabel = themeToggle?.querySelector<HTMLElement>(
+    ".theme-toggle-label",
+  );
+
+  const applyTheme = (theme: "dark" | "light") => {
+    root.dataset.theme = theme;
+    const isLight = theme === "light";
+    themeToggle?.setAttribute("aria-pressed", String(isLight));
+    themeToggle?.setAttribute(
+      "aria-label",
+      isLight ? "切换到深色阅读模式" : "切换到浅色阅读模式",
+    );
+    if (themeLabel) themeLabel.textContent = isLight ? "深色" : "浅色";
+  };
+
+  let savedTheme: "dark" | "light" = "dark";
+  try {
+    if (localStorage.getItem(storageKey) === "light") savedTheme = "light";
+  } catch {
+    // Storage may be unavailable in privacy modes; the deep-sea default remains usable.
+  }
+  applyTheme(savedTheme);
+
+  themeToggle?.addEventListener("click", () => {
+    const nextTheme = root.dataset.theme === "light" ? "dark" : "light";
+    applyTheme(nextTheme);
+    try {
+      localStorage.setItem(storageKey, nextTheme);
+    } catch {
+      // The in-page theme still works when persistence is unavailable.
+    }
+  });
+</script>
