@@ -1,0 +1,69 @@
+services:
+  dlc-blog:
+    container_name: dlc-blog
+    build: ../apps/blog
+    ports:
+      - "${BLOG_PORT:-3101}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dlc-nav:
+    container_name: dlc-nav
+    image: ghcr.io/gethomepage/homepage:v1.13.1
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: nav.dailecheng.xyz
+      HOMEPAGE_VAR_LATITUDE: "${HOMEPAGE_VAR_LATITUDE:-31.2304}"
+      HOMEPAGE_VAR_LONGITUDE: "${HOMEPAGE_VAR_LONGITUDE:-121.4737}"
+    ports:
+      - "127.0.0.1:${NAV_PORT:-3103}:3000"
+    volumes:
+      - ../apps/nav/config:/app/config:ro
+      - ../apps/nav/config/icons:/app/public/icons:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dlc-nav-auth:
+    container_name: dlc-nav-auth
+    image: caddy:2.10.2-alpine
+    environment:
+      NAV_USERNAME: "${NAV_USERNAME}"
+      NAV_PASSWORD_HASH: "${NAV_PASSWORD_HASH}"
+    ports:
+      - "${NAV_AUTH_PORT:-3105}:80"
+    volumes:
+      - ./auth/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      dlc-nav:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
