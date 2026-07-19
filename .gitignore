@@ -18,6 +18,11 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .worktrees/
+.superpowers/
+data/
+deploy/.env
+apps/**/data/
+apps/**/.env
 .DS_Store
 *.suo
 *.ntvs*

@@ -1,0 +1,15 @@
+:root {
+  --dlc-bg-0: #090e19;
+  --dlc-bg-1: #111a2e;
+  --dlc-primary: #55d6be;
+  --dlc-accent: #3b82f6;
+  --dlc-text: #eff6ff;
+  --dlc-radius-card: 20px;
+  --dlc-radius-panel: 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dlc-aurora {
+    animation: none;
+  }
+}
