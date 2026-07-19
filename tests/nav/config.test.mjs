@@ -12,6 +12,10 @@ const expectedHomepageEnvironment = {
   HOMEPAGE_VAR_LATITUDE: "${HOMEPAGE_VAR_LATITUDE:-31.2304}",
   HOMEPAGE_VAR_LONGITUDE: "${HOMEPAGE_VAR_LONGITUDE:-121.4737}",
 };
+const expectedHomepageVolumes = [
+  "./config:/app/config:ro",
+  "./config/icons:/app/public/icons:ro",
+];
 const sensitiveNamePattern = /(?:api[_-]?key|token|secret|password|(?:^|[_-])key(?:$|[_-]))/i;
 
 function parseYaml(path) {
@@ -47,6 +51,10 @@ function environmentObject(environment) {
 
 function assertHomepageEnvironment(environment) {
   assert.deepEqual(environmentObject(environment), expectedHomepageEnvironment);
+}
+
+function assertHomepageVolumes(volumes) {
+  assert.deepEqual(volumes, expectedHomepageVolumes);
 }
 
 function parseEnvironmentExample(content) {
@@ -98,12 +106,21 @@ test("Compose 精确限制 Homepage 的镜像、端口、主机、配置卷与�
   assert.equal(homepage.container_name, "dlc-nav");
   assert.deepEqual(homepage.ports, ["127.0.0.1:${NAV_PORT:-3103}:3000"]);
   assertHomepageEnvironment(homepage.environment);
-  assert.deepEqual(homepage.volumes, ["./config:/app/config:ro"]);
+  assertHomepageVolumes(homepage.volumes);
   assert.doesNotMatch(JSON.stringify(compose), /\/var\/run\/docker\.sock/);
   assert.deepEqual(homepage.healthcheck.test, [
     "CMD-SHELL",
     "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/healthcheck || exit 1",
   ]);
+});
+
+test("Compose 拒绝额外卷、非只读图标卷和 Docker Socket", () => {
+  const volumes = parseYaml("apps/nav/compose.yml").services.homepage.volumes;
+
+  assert.doesNotThrow(() => assertHomepageVolumes(volumes));
+  assert.throws(() => assertHomepageVolumes([...volumes, "./fixture:/fixture:ro"]));
+  assert.throws(() => assertHomepageVolumes(volumes.map((volume) => volume.replace(":ro", ""))));
+  assert.throws(() => assertHomepageVolumes([...volumes, "/var/run/docker.sock:/var/run/docker.sock:ro"]));
 });
 
 test("环境断言会拒绝额外 TOKEN 和缺少天气坐标", () => {
@@ -185,6 +202,7 @@ test("信息组件提供搜索、日期时间与可通过环境变量覆盖的�
 
   assert.ok(widgetByName.has("search"));
   assert.ok(widgetByName.has("datetime"));
+  assert.deepEqual(widgetByName.get("logo"), { icon: "/icons/dlc-logo.svg" });
   assert.deepEqual(widgetByName.get("openmeteo").latitude, "{{HOMEPAGE_VAR_LATITUDE}}");
   assert.deepEqual(widgetByName.get("openmeteo").longitude, "{{HOMEPAGE_VAR_LONGITUDE}}");
   assert.match(env, /^HOMEPAGE_VAR_LATITUDE=31\.2304$/m);

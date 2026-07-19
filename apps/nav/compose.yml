@@ -11,6 +11,7 @@ services:
       - "127.0.0.1:${NAV_PORT:-3103}:3000"
     volumes:
       - ./config:/app/config:ro
+      - ./config/icons:/app/public/icons:ro
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/healthcheck || exit 1"]
       interval: 30s

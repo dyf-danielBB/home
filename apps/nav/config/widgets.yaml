@@ -1,3 +1,5 @@
+- logo:
+    icon: /icons/dlc-logo.svg
 - search:
     provider: baidu
     target: _blank
