@@ -1,64 +1,127 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const root = new URL("../..", import.meta.url);
-const read = (path) => readFile(new URL(path, root), "utf8");
+const fileUrl = (path) => new URL(path, root);
+const read = (path) => readFile(fileUrl(path), "utf8");
 
-test("Homepage Compose 锁定版本、仅本机监听并限制允许的主机", async () => {
-  const compose = await read("apps/nav/compose.yml");
+function parseYaml(path) {
+  const output = execFileSync(
+    "ruby",
+    [
+      "-ryaml",
+      "-rjson",
+      "-e",
+      "puts JSON.generate(YAML.safe_load(File.read(ARGV.fetch(0)), aliases: false))",
+      fileURLToPath(fileUrl(path)),
+    ],
+    { encoding: "utf8" },
+  );
+  return JSON.parse(output);
+}
 
-  assert.match(compose, /image:\s*ghcr\.io\/gethomepage\/homepage:v1\.13\.1/);
-  assert.match(compose, /container_name:\s*dlc-nav/);
-  assert.match(compose, /127\.0\.0\.1:\$\{NAV_PORT:-3103\}:3000/);
-  assert.match(compose, /HOMEPAGE_ALLOWED_HOSTS=nav\.dailecheng\.xyz/);
-  assert.doesNotMatch(compose, /HOMEPAGE_ALLOWED_HOSTS=\*/);
-  assert.doesNotMatch(compose, /\/var\/run\/docker\.sock/);
-  assert.match(compose, /:\/app\/config:ro/);
-  assert.match(compose, /healthcheck:/);
+function environmentValues(environment, name) {
+  return environment.filter((entry) => entry.startsWith(`${name}=`));
+}
+
+function collectSensitiveKeys(value, path = "") {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => collectSensitiveKeys(item, `${path}[${index}]`));
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, item]) => [
+      ...(/(key|secret|token|password|api[_-]?key)/i.test(key) ? [`${path}.${key}`] : []),
+      ...collectSensitiveKeys(item, path ? `${path}.${key}` : key),
+    ]);
+  }
+  return [];
+}
+
+test("Compose 精确限制 Homepage 的镜像、端口、主机、配置卷与健康检查", () => {
+  const compose = parseYaml("apps/nav/compose.yml");
+  const homepage = compose.services.homepage;
+
+  assert.equal(homepage.image, "ghcr.io/gethomepage/homepage:v1.13.1");
+  assert.equal(homepage.container_name, "dlc-nav");
+  assert.deepEqual(homepage.ports, ["127.0.0.1:${NAV_PORT:-3103}:3000"]);
+  assert.deepEqual(
+    environmentValues(homepage.environment, "HOMEPAGE_ALLOWED_HOSTS"),
+    ["HOMEPAGE_ALLOWED_HOSTS=nav.dailecheng.xyz"],
+  );
+  assert.ok(!homepage.environment.includes("HOMEPAGE_ALLOWED_HOSTS=*"));
+  assert.deepEqual(homepage.volumes, ["./config:/app/config:ro"]);
+  assert.doesNotMatch(JSON.stringify(compose), /\/var\/run\/docker\.sock/);
+  assert.deepEqual(homepage.healthcheck.test, [
+    "CMD-SHELL",
+    "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/healthcheck || exit 1",
+  ]);
 });
 
-test("Homepage 配置使用中文深色卡片布局且书签为空", async () => {
-  const [settings, bookmarks] = await Promise.all([
-    read("apps/nav/config/settings.yaml"),
-    read("apps/nav/config/bookmarks.yaml"),
+test("Homepage 配置完整、可只读加载且不包含密钥字段", async () => {
+  const configFiles = [
+    "apps/nav/config/settings.yaml",
+    "apps/nav/config/services.yaml",
+    "apps/nav/config/widgets.yaml",
+    "apps/nav/config/bookmarks.yaml",
+    "apps/nav/config/docker.yaml",
+    "apps/nav/config/kubernetes.yaml",
+    "apps/nav/config/proxmox.yaml",
+  ];
+  const [settings, bookmarks, docker, kubernetes, proxmox, customCss, customJs] = await Promise.all([
+    Promise.resolve(parseYaml(configFiles[0])),
+    Promise.resolve(parseYaml(configFiles[3])),
+    Promise.resolve(parseYaml(configFiles[4])),
+    Promise.resolve(parseYaml(configFiles[5])),
+    Promise.resolve(parseYaml(configFiles[6])),
+    read("apps/nav/config/custom.css"),
+    read("apps/nav/config/custom.js"),
   ]);
 
-  assert.match(settings, /language:\s*zh-Hans/);
-  assert.match(settings, /theme:\s*dark/);
-  assert.match(settings, /headerStyle:\s*boxedWidgets/);
-  assert.match(settings, /layout:\s*\n\s*DLC 空间:/);
-  assert.equal(bookmarks.trim(), "[]");
+  assert.equal(settings.language, "zh-Hans");
+  assert.equal(settings.theme, "dark");
+  assert.equal(settings.headerStyle, "boxedWidgets");
+  assert.deepEqual(settings.layout["DLC 空间"], { style: "row", columns: 3 });
+  assert.deepEqual(bookmarks, []);
+  assert.deepEqual(docker, {});
+  assert.deepEqual(kubernetes, { mode: "disabled" });
+  assert.deepEqual(proxmox, {});
+  assert.equal(customCss, "");
+  assert.equal(customJs, "");
+
+  const sensitiveKeys = configFiles.flatMap((path) => collectSensitiveKeys(parseYaml(path)));
+  assert.deepEqual(sensitiveKeys, []);
 });
 
 test("信息组件提供搜索、日期时间与可通过环境变量覆盖的上海天气", async () => {
   const [widgets, env] = await Promise.all([
-    read("apps/nav/config/widgets.yaml"),
+    Promise.resolve(parseYaml("apps/nav/config/widgets.yaml")),
     read("apps/nav/env.example"),
   ]);
+  const widgetByName = new Map(widgets.map((widget) => Object.entries(widget)[0]));
 
-  assert.match(widgets, /- search:/);
-  assert.match(widgets, /- datetime:/);
-  assert.match(widgets, /- openmeteo:/);
-  assert.match(widgets, /latitude:\s*["']\{\{HOMEPAGE_VAR_LATITUDE\}\}["']/);
-  assert.match(widgets, /longitude:\s*["']\{\{HOMEPAGE_VAR_LONGITUDE\}\}["']/);
+  assert.ok(widgetByName.has("search"));
+  assert.ok(widgetByName.has("datetime"));
+  assert.deepEqual(widgetByName.get("openmeteo").latitude, "{{HOMEPAGE_VAR_LATITUDE}}");
+  assert.deepEqual(widgetByName.get("openmeteo").longitude, "{{HOMEPAGE_VAR_LONGITUDE}}");
   assert.match(env, /^HOMEPAGE_VAR_LATITUDE=31\.2304$/m);
   assert.match(env, /^HOMEPAGE_VAR_LONGITUDE=121\.4737$/m);
 });
 
-test("DLC 空间分组包含六个既有域名入口", async () => {
-  const services = await read("apps/nav/config/services.yaml");
-  const expectedUrls = [
+test("DLC 空间服务组的 href 集合恰为六个既有入口", () => {
+  const services = parseYaml("apps/nav/config/services.yaml");
+  const group = services.find((item) => Object.hasOwn(item, "DLC 空间"));
+  const hrefs = group["DLC 空间"].map((service) => Object.values(service)[0].href);
+
+  assert.deepEqual(new Set(hrefs), new Set([
     "https://dailecheng.xyz/",
     "https://blog.dailecheng.xyz/",
     "https://pan.dailecheng.xyz/",
     "https://web.dailecheng.xyz/",
     "https://hot.dailecheng.xyz/",
     "https://audio.dailecheng.xyz/",
-  ];
-
-  assert.match(services, /- DLC 空间:/);
-  for (const url of expectedUrls) {
-    assert.match(services, new RegExp(url.replaceAll(".", "\\.")), `缺少 ${url}`);
-  }
+  ]));
+  assert.equal(hrefs.length, 6);
 });
