@@ -44,6 +44,12 @@ const upstreamBlobs = {
 };
 
 const readBlogFile = (file) => readFile(new URL(file, blogDirectory), 'utf8');
+const hasExpectedPublicPort = (compose) =>
+  /^ {4}ports:\r?\n {6}- ["']\$\{BLOG_PORT:-3101\}:80["']\r?$/m.test(compose);
+const hasRootHealthCheck = (compose) =>
+  /^ {4}healthcheck:\r?\n {6}test: \["CMD-SHELL", "(?:curl -fsS|wget -q --spider) http:\/\/localhost\/ \|\| exit 1"\]\r?$/m.test(
+    compose,
+  );
 
 async function listSourceFiles(directory = blogDirectory, relativeDirectory = '') {
   const files = [];
@@ -93,9 +99,22 @@ test('defines the dlc-blog service, public port, and root health check', async (
   const compose = await readBlogFile('compose.yml');
 
   assert.match(compose, /container_name:\s*dlc-blog/);
-  assert.match(compose, /\$\{BLOG_PORT:-3101\}:80/);
-  assert.match(compose, /healthcheck:[\s\S]*?(?:curl|wget)[\s\S]*?http:\/\/localhost\//);
+  assert.ok(hasExpectedPublicPort(compose));
+  assert.ok(hasRootHealthCheck(compose));
   assert.doesNotMatch(compose, /:latest\b/);
+});
+
+test('rejects loopback-only port mappings', () => {
+  const loopbackOnlyCompose = '    ports:\n      - "127.0.0.1:${BLOG_PORT:-3101}:80"';
+
+  assert.equal(hasExpectedPublicPort(loopbackOnlyCompose), false);
+});
+
+test('rejects health checks outside the root path', () => {
+  const privateHealthCheckCompose =
+    '    healthcheck:\n      test: ["CMD-SHELL", "wget -q --spider http://localhost/private || exit 1"]';
+
+  assert.equal(hasRootHealthCheck(privateHealthCheckCompose), false);
 });
 
 test('excludes local dependencies, build output, secrets, logs, and editor files from Docker', async () => {
