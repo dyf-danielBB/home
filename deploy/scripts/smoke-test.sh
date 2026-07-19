@@ -26,6 +26,32 @@ require_positive_decimal() {
     fail "$variable_name 必须是大于 0 的十进制正整数"
 }
 
+require_retry_delay() {
+  variable_value=$1
+  case $variable_value in
+    ""|*[!0-9]*) fail "SMOKE_RETRY_DELAY 必须是 0 到 60 的十进制整数" ;;
+  esac
+  normalized_delay=$variable_value
+  while [ "$normalized_delay" != 0 ] && [ "${normalized_delay#0}" != "$normalized_delay" ]; do
+    normalized_delay=${normalized_delay#0}
+  done
+  case $normalized_delay in
+    [0-9]|[1-5][0-9]|60) ;;
+    *) fail "SMOKE_RETRY_DELAY 必须是 0 到 60 的十进制整数" ;;
+  esac
+  unset normalized_delay
+}
+
+reject_credential_line_breaks() {
+  variable_name=$1
+  variable_value=$2
+  sanitized_value=$(printf '%s' "$variable_value" | LC_ALL=C tr -d '\r\n') ||
+    fail "无法校验 $variable_name"
+  [ "$sanitized_value" = "$variable_value" ] ||
+    fail "$variable_name 不得包含 CR 回车或 LF 换行"
+  unset sanitized_value
+}
+
 escape_curl_config_value() {
   LC_ALL=C sed 's/\\/\\\\/g; s/"/\\"/g'
 }
@@ -40,6 +66,7 @@ environment_file=$deploy_directory/.env
 
 require_positive_decimal SMOKE_MAX_ATTEMPTS "$SMOKE_MAX_ATTEMPTS"
 require_positive_decimal SMOKE_COMMAND_TIMEOUT "$SMOKE_COMMAND_TIMEOUT"
+require_retry_delay "$SMOKE_RETRY_DELAY"
 
 printf '%s\n' '开始 NAS 第一阶段只读冒烟验收（不会删除或重启容器）。'
 
@@ -47,21 +74,30 @@ command -v timeout >/dev/null 2>&1 ||
   fail "未找到 timeout 命令；请在 NAS 上安装后重试"
 command -v docker >/dev/null 2>&1 ||
   fail "未找到 Docker；请仅在已安装 Docker 的 NAS 上执行"
-timeout "$SMOKE_COMMAND_TIMEOUT" docker info >/dev/null 2>&1 ||
-  fail "Docker 不可用；请在 NAS 上确认 Docker 服务正常"
 [ -f "$environment_file" ] ||
   fail "缺少 $environment_file；请先在 NAS 配置 deploy/.env"
 
 # shellcheck disable=SC1090
 . "$environment_file"
 
+require_positive_decimal SMOKE_MAX_ATTEMPTS "$SMOKE_MAX_ATTEMPTS"
+require_positive_decimal SMOKE_COMMAND_TIMEOUT "$SMOKE_COMMAND_TIMEOUT"
+require_retry_delay "$SMOKE_RETRY_DELAY"
+timeout "$SMOKE_COMMAND_TIMEOUT" docker info >/dev/null 2>&1 ||
+  fail "Docker 不可用；请在 NAS 上确认 Docker 服务正常"
+
 nav_username=${NAV_USERNAME:-}
 nav_password=${NAV_PASSWORD:-}
 nav_password_hash=${NAV_PASSWORD_HASH:-}
+unset NAV_USERNAME NAV_PASSWORD NAV_PASSWORD_HASH
 require_value NAV_USERNAME "$nav_username"
 require_value NAV_PASSWORD "$nav_password"
 require_value NAV_PASSWORD_HASH "$nav_password_hash"
-unset NAV_USERNAME NAV_PASSWORD NAV_PASSWORD_HASH nav_password_hash
+unset nav_password_hash
+command -v tr >/dev/null 2>&1 ||
+  fail "未找到 tr；请在 NAS 上安装后重试"
+reject_credential_line_breaks NAV_USERNAME "$nav_username"
+reject_credential_line_breaks NAV_PASSWORD "$nav_password"
 command -v curl >/dev/null 2>&1 ||
   fail "未找到 curl；请在 NAS 上安装后重试"
 command -v sed >/dev/null 2>&1 ||
@@ -104,11 +140,11 @@ wait_for_http_status() {
   while [ "$request_attempt" -le "$SMOKE_MAX_ATTEMPTS" ]; do
     if [ "$authentication_mode" = basic ]; then
       response_status=$(printf 'user = "%s"\n' "$curl_basic_user" | \
-        curl --config - --silent --show-error --output /dev/null --write-out '%{http_code}' \
+        curl --disable --config - --silent --show-error --output /dev/null --write-out '%{http_code}' \
           --connect-timeout 3 --max-time 10 "$check_url" 2>/dev/null) ||
         response_status=000
     else
-      response_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+      response_status=$(curl --disable --silent --show-error --output /dev/null --write-out '%{http_code}' \
         --connect-timeout 3 --max-time 10 "$check_url" 2>/dev/null) ||
         response_status=000
     fi

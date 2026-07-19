@@ -124,8 +124,18 @@ function assertNoRealSecrets(path, text) {
       const safeReference = /^\$\{[A-Z0-9_]+(?::[?+\-][^}]*)?\}$/i.test(value);
       const safePlaceholder =
         /^(?:replace|example|fixture|test)(?:[-_]|$)/i.test(value) || /^<[^>]+>$/.test(value);
+      const safeCodeReference =
+        path.startsWith("tests/") &&
+        /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/.test(value);
+      const safeTestFixture =
+        path.startsWith("tests/") &&
+        (/fixture/i.test(line) ||
+          /secret-scan-fixture/.test(line) ||
+          /\bconfig_env\s*=/.test(line) ||
+          /^\s*const\s+password\s*=/.test(line) ||
+          /^(?:plaintext|plaintext-password)$/.test(value));
       assert.ok(
-        safeReference || safePlaceholder,
+        safeReference || safePlaceholder || safeCodeReference || safeTestFixture,
         `${path} 疑似对 ${match[1]} 进行了真实字面量赋值`,
       );
     }
@@ -211,6 +221,11 @@ test("阶段一跟踪文件不包含真实敏感信息", async () => {
     "apps/nav",
     "shared",
     "deploy",
+    "tests/contracts",
+    "tests/blog",
+    "tests/nav",
+    "tests/deploy",
+    "tests/integration",
   ]);
   const trackedFiles = stdout.split("\0").filter(Boolean);
 
@@ -232,8 +247,22 @@ test("敏感扫描拒绝非行首真实字面量并允许变量引用", () => {
   assert.doesNotThrow(() =>
     assertNoRealSecrets(
       "fixture.yml",
-      'NAV_PASSWORD: "${NAV_PASSWORD}"\nNAV_PASSWORD_HASH: "${NAV_PASSWORD_HASH:?required}"',
+      'NAV_PASSWORD: "${NAV_PASSWORD}"\nNAV_PASSWORD_HASH: "${NAV_PASSWORD_HASH:?required}"', // secret-scan-fixture
     ),
+  );
+  assert.doesNotThrow(() =>
+    assertNoRealSecrets(
+      "tests/deploy/example.test.mjs",
+      'const unsafeFixture = { NAV_PASSWORD: "fixture-password" };',
+    ),
+  );
+  assert.throws(
+    () =>
+      assertNoRealSecrets(
+        "tests/deploy/example.test.mjs",
+        'const productionConfig = { NAV_PASSWORD: "leaked-real-credential" };', // secret-scan-fixture
+      ),
+    /真实字面量赋值/,
   );
 });
 
@@ -250,6 +279,7 @@ test("NAS 冒烟脚本安全处理本地、配置和凭证缺失", async () => {
   assert.match(script, /--max-time/);
   assert.match(script, /SMOKE_MAX_ATTEMPTS/);
   assert.match(script, /SMOKE_COMMAND_TIMEOUT/);
+  assert.match(script, /SMOKE_RETRY_DELAY/);
   assert.match(script, /--config\s+-/);
   assert.doesNotMatch(
     script,
@@ -267,6 +297,63 @@ test("NAS 冒烟脚本安全处理本地、配置和凭证缺失", async () => {
       assert.match(`${result.stdout}${result.stderr}`, new RegExp(`${variable}.*十进制正整数`));
       assert.equal(await readSmokeLog(invalid), "", "无效参数不得触发 Docker/HTTP 检查");
     }
+  }
+
+  for (const environmentLine of [
+    "SMOKE_MAX_ATTEMPTS=0",
+    "SMOKE_MAX_ATTEMPTS=not-a-number",
+    "SMOKE_COMMAND_TIMEOUT=0",
+    "SMOKE_RETRY_DELAY=-1",
+    "SMOKE_RETRY_DELAY=infinity",
+    "SMOKE_RETRY_DELAY=61",
+    "SMOKE_RETRY_DELAY=999999999",
+  ]) {
+    const invalidEnvironment = await makeSmokeFixture({
+      env: [
+        environmentLine,
+        "NAV_USERNAME=smoke-user",
+        "NAV_PASSWORD=fixture-password",
+        "NAV_PASSWORD_HASH=fixture-hash",
+        "",
+      ].join("\n"),
+    });
+    await installForwardingTimeout(invalidEnvironment);
+    await installHealthyDocker(invalidEnvironment);
+    const result = await runSmoke(invalidEnvironment);
+    assert.notEqual(result.status, 0);
+    assert.match(
+      `${result.stdout}${result.stderr}`,
+      /SMOKE_(?:MAX_ATTEMPTS|COMMAND_TIMEOUT|RETRY_DELAY).*(?:十进制正整数|0 到 60)/,
+    );
+    assert.equal(await readSmokeLog(invalidEnvironment), "", ".env 无效参数不得触发 docker info");
+  }
+
+  for (const [variable, value] of [
+    ["NAV_USERNAME", "bad\rusername"],
+    ["NAV_USERNAME", "bad\nusername"],
+    ["NAV_PASSWORD", "bad\rpassword"],
+    ["NAV_PASSWORD", "bad\npassword"],
+  ]) {
+    const invalidCredential = await makeSmokeFixture({
+      env: [
+        "NAV_USERNAME=smoke-user",
+        "NAV_PASSWORD=fixture-password",
+        "NAV_PASSWORD_HASH=fixture-hash",
+        `${variable}='${value}'`,
+        "",
+      ].join("\n"),
+    });
+    await installForwardingTimeout(invalidCredential);
+    await installHealthyDocker(invalidCredential);
+    await writeExecutable(
+      join(invalidCredential.binDirectory, "curl"),
+      '#!/bin/sh\nprintf "%s\\n" curl-called >> "$SMOKE_TEST_LOG"\nexit 1\n',
+    );
+    await writeExecutable(join(invalidCredential.binDirectory, "tr"), '#!/bin/sh\nexec /usr/bin/tr "$@"\n');
+    const result = await runSmoke(invalidCredential);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}${result.stderr}`, new RegExp(`${variable}.*(?:CR|LF|回车|换行)`));
+    assert.doesNotMatch(await readSmokeLog(invalidCredential), /curl-called|curl-argv/);
   }
 
   const noTimeout = await makeSmokeFixture();
@@ -315,6 +402,7 @@ test("NAS 冒烟脚本检查三容器与 200、401、认证后 200", async () =>
   await installForwardingTimeout(fixture);
   await installHealthyDocker(fixture);
   await writeExecutable(join(fixture.binDirectory, "sed"), '#!/bin/sh\nexec /usr/bin/sed "$@"\n');
+  await writeExecutable(join(fixture.binDirectory, "tr"), '#!/bin/sh\nexec /usr/bin/tr "$@"\n');
   await writeExecutable(
     join(fixture.binDirectory, "curl"),
     `#!/bin/sh
@@ -360,6 +448,7 @@ esac
 
   const result = await runSmoke(fixture, {
     SMOKE_COMMAND_TIMEOUT: "7",
+    SMOKE_RETRY_DELAY: "0",
     SMOKE_EXPECTED_CONFIG_FILE: fixture.expectedConfigFile,
   });
   const output = `${result.stdout}${result.stderr}`;
@@ -382,6 +471,7 @@ esac
   );
   const curlArguments = calls.match(/^curl-argv:.*$/gm) ?? [];
   assert.equal(curlArguments.length, 3);
+  for (const argumentsLine of curlArguments) assert.match(argumentsLine, /^curl-argv:<--disable>/);
   assert.match(curlArguments[0], /--connect-timeout.*<3>.*--max-time.*<10>.*3101/);
   assert.doesNotMatch(curlArguments[0], /--config/);
   assert.match(curlArguments[1], /--connect-timeout.*<3>.*--max-time.*<10>.*3105/);
