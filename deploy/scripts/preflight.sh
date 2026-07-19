@@ -45,8 +45,14 @@ for var_name in DLC_PUID DLC_PGID BLOG_PORT PAN_PORT NAV_PORT WEB_PORT NAV_AUTH_
 done
 
 if [ "$status" -eq 0 ]; then
-  if ! docker compose config >/dev/null 2>&1; then
-    fail "DLC_DATA_ROOT：docker compose config 检查失败"
+  if ! command -v docker >/dev/null 2>&1; then
+    fail "docker compose 不可用：未找到 docker 命令"
+  else
+    compose_output=$(docker compose config 2>&1)
+    compose_status=$?
+    if [ "$compose_status" -ne 0 ]; then
+      fail "docker compose config 检查失败：${compose_output:-未提供诊断信息}"
+    fi
   fi
 fi
 
