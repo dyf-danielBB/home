@@ -7,6 +7,12 @@ import test from "node:test";
 const root = new URL("../..", import.meta.url);
 const fileUrl = (path) => new URL(path, root);
 const read = (path) => readFile(fileUrl(path), "utf8");
+const expectedHomepageEnvironment = {
+  HOMEPAGE_ALLOWED_HOSTS: "nav.dailecheng.xyz",
+  HOMEPAGE_VAR_LATITUDE: "${HOMEPAGE_VAR_LATITUDE:-31.2304}",
+  HOMEPAGE_VAR_LONGITUDE: "${HOMEPAGE_VAR_LONGITUDE:-121.4737}",
+};
+const sensitiveNamePattern = /(?:api[_-]?key|token|secret|password|(?:^|[_-])key(?:$|[_-]))/i;
 
 function parseYaml(path) {
   const output = execFileSync(
@@ -23,8 +29,38 @@ function parseYaml(path) {
   return JSON.parse(output);
 }
 
-function environmentValues(environment, name) {
-  return environment.filter((entry) => entry.startsWith(`${name}=`));
+function environmentObject(environment) {
+  if (!Array.isArray(environment)) {
+    assert.ok(environment && typeof environment === "object", "environment 必须是数组或映射");
+    return environment;
+  }
+
+  const pairs = environment.map((entry) => {
+    assert.equal(typeof entry, "string", "environment 数组项必须是 NAME=value 字符串");
+    const separator = entry.indexOf("=");
+    assert.ok(separator > 0, "environment 数组项必须包含变量名和值");
+    return [entry.slice(0, separator), entry.slice(separator + 1)];
+  });
+  assert.equal(new Set(pairs.map(([name]) => name)).size, pairs.length, "environment 不得有重复变量");
+  return Object.fromEntries(pairs);
+}
+
+function assertHomepageEnvironment(environment) {
+  assert.deepEqual(environmentObject(environment), expectedHomepageEnvironment);
+}
+
+function parseEnvironmentExample(content) {
+  return Object.fromEntries(
+    content
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        assert.ok(separator > 0, "env.example 必须使用 NAME=value 格式");
+        return [line.slice(0, separator), line.slice(separator + 1)];
+      }),
+  );
 }
 
 function collectSensitiveKeys(value, path = "") {
@@ -33,11 +69,25 @@ function collectSensitiveKeys(value, path = "") {
   }
   if (value && typeof value === "object") {
     return Object.entries(value).flatMap(([key, item]) => [
-      ...(/(key|secret|token|password|api[_-]?key)/i.test(key) ? [`${path}.${key}`] : []),
+      ...(sensitiveNamePattern.test(key) ? [`${path}.${key}`] : []),
       ...collectSensitiveKeys(item, path ? `${path}.${key}` : key),
     ]);
   }
   return [];
+}
+
+function assertNoSensitiveFields({ compose, envExample, configValues }) {
+  const sensitiveFields = [
+    ...collectSensitiveKeys(compose, "compose"),
+    ...Object.keys(environmentObject(compose.services.homepage.environment))
+      .filter((name) => sensitiveNamePattern.test(name))
+      .map((name) => `compose.services.homepage.environment.${name}`),
+    ...Object.keys(parseEnvironmentExample(envExample))
+      .filter((name) => sensitiveNamePattern.test(name))
+      .map((name) => `apps/nav/env.example.${name}`),
+    ...configValues.flatMap((value) => collectSensitiveKeys(value)),
+  ];
+  assert.deepEqual(sensitiveFields, []);
 }
 
 test("Compose 精确限制 Homepage 的镜像、端口、主机、配置卷与健康检查", () => {
@@ -47,11 +97,7 @@ test("Compose 精确限制 Homepage 的镜像、端口、主机、配置卷与�
   assert.equal(homepage.image, "ghcr.io/gethomepage/homepage:v1.13.1");
   assert.equal(homepage.container_name, "dlc-nav");
   assert.deepEqual(homepage.ports, ["127.0.0.1:${NAV_PORT:-3103}:3000"]);
-  assert.deepEqual(
-    environmentValues(homepage.environment, "HOMEPAGE_ALLOWED_HOSTS"),
-    ["HOMEPAGE_ALLOWED_HOSTS=nav.dailecheng.xyz"],
-  );
-  assert.ok(!homepage.environment.includes("HOMEPAGE_ALLOWED_HOSTS=*"));
+  assertHomepageEnvironment(homepage.environment);
   assert.deepEqual(homepage.volumes, ["./config:/app/config:ro"]);
   assert.doesNotMatch(JSON.stringify(compose), /\/var\/run\/docker\.sock/);
   assert.deepEqual(homepage.healthcheck.test, [
@@ -60,7 +106,16 @@ test("Compose 精确限制 Homepage 的镜像、端口、主机、配置卷与�
   ]);
 });
 
-test("Homepage 配置完整、可只读加载且不包含密钥字段", async () => {
+test("环境断言会拒绝额外 TOKEN 和缺少天气坐标", () => {
+  const homepage = parseYaml("apps/nav/compose.yml").services.homepage;
+  assert.doesNotThrow(() => assertHomepageEnvironment(homepage.environment));
+  assert.throws(() => assertHomepageEnvironment([...homepage.environment, "API_TOKEN=fixture"]));
+  assert.throws(() => assertHomepageEnvironment(
+    homepage.environment.filter((entry) => !entry.startsWith("HOMEPAGE_VAR_LATITUDE=")),
+  ));
+});
+
+test("Homepage 配置完整、可只读加载且不包含敏感字段", async () => {
   const configFiles = [
     "apps/nav/config/settings.yaml",
     "apps/nav/config/services.yaml",
@@ -70,7 +125,7 @@ test("Homepage 配置完整、可只读加载且不包含密钥字段", async ()
     "apps/nav/config/kubernetes.yaml",
     "apps/nav/config/proxmox.yaml",
   ];
-  const [settings, bookmarks, docker, kubernetes, proxmox, customCss, customJs] = await Promise.all([
+  const [settings, bookmarks, docker, kubernetes, proxmox, customCss, customJs, envExample] = await Promise.all([
     Promise.resolve(parseYaml(configFiles[0])),
     Promise.resolve(parseYaml(configFiles[3])),
     Promise.resolve(parseYaml(configFiles[4])),
@@ -78,6 +133,7 @@ test("Homepage 配置完整、可只读加载且不包含密钥字段", async ()
     Promise.resolve(parseYaml(configFiles[6])),
     read("apps/nav/config/custom.css"),
     read("apps/nav/config/custom.js"),
+    read("apps/nav/env.example"),
   ]);
 
   assert.equal(settings.language, "zh-Hans");
@@ -91,8 +147,33 @@ test("Homepage 配置完整、可只读加载且不包含密钥字段", async ()
   assert.equal(customCss, "");
   assert.equal(customJs, "");
 
-  const sensitiveKeys = configFiles.flatMap((path) => collectSensitiveKeys(parseYaml(path)));
-  assert.deepEqual(sensitiveKeys, []);
+  const configValues = configFiles.map((path) => parseYaml(path));
+  const compose = parseYaml("apps/nav/compose.yml");
+  assertNoSensitiveFields({ compose, envExample, configValues });
+  assert.doesNotThrow(() => assertNoSensitiveFields({
+    compose,
+    envExample: `${envExample}\nPUID=1000\nPGID=1000\n`,
+    configValues,
+  }));
+  assert.throws(() => assertNoSensitiveFields({
+    compose: {
+      ...compose,
+      services: {
+        ...compose.services,
+        homepage: {
+          ...compose.services.homepage,
+          environment: [...compose.services.homepage.environment, "API_TOKEN=fixture"],
+        },
+      },
+    },
+    envExample,
+    configValues,
+  }));
+  assert.throws(() => assertNoSensitiveFields({
+    compose,
+    envExample: `${envExample}\nPASSWORD=fixture\n`,
+    configValues,
+  }));
 });
 
 test("信息组件提供搜索、日期时间与可通过环境变量覆盖的上海天气", async () => {
