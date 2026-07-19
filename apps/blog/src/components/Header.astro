@@ -40,13 +40,7 @@
     if (themeLabel) themeLabel.textContent = isLight ? "深色" : "浅色";
   };
 
-  let savedTheme: "dark" | "light" = "dark";
-  try {
-    if (localStorage.getItem(storageKey) === "light") savedTheme = "light";
-  } catch {
-    // Storage may be unavailable in privacy modes; the deep-sea default remains usable.
-  }
-  applyTheme(savedTheme);
+  applyTheme(root.dataset.theme === "light" ? "light" : "dark");
 
   themeToggle?.addEventListener("click", () => {
     const nextTheme = root.dataset.theme === "light" ? "dark" : "light";

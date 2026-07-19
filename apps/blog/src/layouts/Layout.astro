@@ -19,7 +19,25 @@ const {
 
 <!doctype html>
 <html lang="zh-CN" data-theme="dark">
-  <Head title={title} description={description} image={image} />
+  <head>
+    <script is:inline>
+      (() => {
+        const root = document.documentElement;
+        let theme = "dark";
+
+        try {
+          if (localStorage.getItem("dlc-blog-theme") === "light") {
+            theme = "light";
+          }
+        } catch {
+          // The deep-sea default remains available when storage is blocked.
+        }
+
+        root.dataset.theme = theme;
+      })();
+    </script>
+    <Head title={title} description={description} image={image} />
+  </head>
   <body>
     <div class="dlc-shell mx-auto w-full max-w-2xl px-6 py-12 md:py-16">
       <Header />

@@ -17,6 +17,7 @@ const blogConfigurationFiles = new Set([
 ]);
 const dlcCustomizationFiles = new Set([
   "public/dlc-logo.svg",
+  "src/components/Head.astro",
   "src/components/Header.astro",
   "src/consts.ts",
   "src/content/blog/about-dlc-space.md",
@@ -38,7 +39,6 @@ const upstreamBlobs = {
   "public/favicon.svg": "f157bd1c5e287c70a508a98a13f538491aa4dafc",
   "src/assets/blog-placeholder-1.jpg": "c4214b0e639a782769ea329846e51ec066b7976e",
   "src/assets/blog-placeholder-2.jpg": "fbe2ac0cb0c744ddfa28d406c0e90956a3398aaa",
-  "src/components/Head.astro": "73190c35b933a2d3b17d15e831611900363e5d1d",
   "src/components/Link.astro": "3ed382d64cba4a7d4d44e00206e330852db1048d",
   "src/content.config.ts": "093284e234e330463e1d3e82f9897d9426197659",
   "src/content/blog/customizing-miniblog.md": "0fc7400be743ef9ffae1a0f6fcbc36c555924be5",
@@ -146,12 +146,12 @@ test("excludes local dependencies, build output, secrets, logs, and editor files
   }
 });
 
-test("preserves 26 untouched upstream files and the exact DLC customization surface", async () => {
+test("preserves 25 untouched upstream files and the exact DLC customization surface", async () => {
   const sourceFiles = await listSourceFiles();
   const expectedFiles = [...Object.keys(upstreamBlobs), ...dlcCustomizationFiles];
 
-  assert.equal(Object.keys(upstreamBlobs).length, 26);
-  assert.equal(dlcCustomizationFiles.size, 7);
+  assert.equal(Object.keys(upstreamBlobs).length, 25);
+  assert.equal(dlcCustomizationFiles.size, 8);
   assert.deepEqual(sourceFiles.sort(), expectedFiles.sort());
 
   for (const [file, expectedBlob] of Object.entries(upstreamBlobs)) {

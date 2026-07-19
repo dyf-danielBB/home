@@ -1,8 +1,21 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import test, { before } from "node:test";
 
+const execFileAsync = promisify(execFile);
+const projectDirectory = new URL("../../", import.meta.url);
 const readProjectFile = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8");
+const readBuiltFile = (path) =>
+  readFile(new URL(`../../apps/blog/dist/${path}`, import.meta.url), "utf8");
+
+before(async () => {
+  await execFileAsync("pnpm", ["--dir", "apps/blog", "build"], {
+    cwd: fileURLToPath(projectDirectory),
+  });
+});
 
 function parseFrontmatter(markdown) {
   const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
@@ -72,6 +85,7 @@ test("provides branded, keyboard-operable navigation and theme control", async (
   assert.match(header, /href=["']\/blog\/about-dlc-space["'][^>]*>\s*\u5173于\s*</s);
   assert.match(header, /<button[^>]+id=["']theme-toggle["'][^>]+aria-label=/s);
   assert.match(header, /localStorage/);
+  assert.doesNotMatch(header, /localStorage\.getItem/);
 });
 
 test("applies the complete aurora theme with light reading mode and reduced motion", async () => {
@@ -92,4 +106,63 @@ test("applies the complete aurora theme with light reading mode and reduced moti
   assert.match(css, /@media\s*\(max-width:/);
   assert.match(layout, /<html\s+lang=["']zh-CN["']/);
   assert.equal(blogLogo, sharedLogo, "blog logo must exactly match the shared brand asset");
+});
+
+test("builds both DLC articles, RSS entries, and canonical URLs", async () => {
+  const [about, hello, rss] = await Promise.all([
+    readBuiltFile("blog/about-dlc-space/index.html"),
+    readBuiltFile("blog/hello-dlc-space/index.html"),
+    readBuiltFile("rss.xml"),
+  ]);
+
+  assert.match(
+    about,
+    /<link rel="canonical" href="https:\/\/blog\.dailecheng\.xyz\/blog\/about-dlc-space\/">/,
+  );
+  assert.match(
+    hello,
+    /<link rel="canonical" href="https:\/\/blog\.dailecheng\.xyz\/blog\/hello-dlc-space\/">/,
+  );
+  assert.match(rss, /<link>https:\/\/blog\.dailecheng\.xyz\/blog\/about-dlc-space\/<\/link>/);
+  assert.match(rss, /<link>https:\/\/blog\.dailecheng\.xyz\/blog\/hello-dlc-space\/<\/link>/);
+});
+
+test("restores the saved theme synchronously at the start of the real document head", async () => {
+  const [layout, header, index] = await Promise.all([
+    readProjectFile("apps/blog/src/layouts/Layout.astro"),
+    readProjectFile("apps/blog/src/components/Header.astro"),
+    readBuiltFile("index.html"),
+  ]);
+  const head = index.match(/<head>([\s\S]*?)<\/head>/)?.[1];
+
+  assert.ok(head, "generated page must contain a head");
+  const themeScriptIndex = head.indexOf("dlc-blog-theme");
+  const stylesheetIndex = head.indexOf('rel="stylesheet"');
+  assert.ok(themeScriptIndex >= 0, "theme restore script must be in head");
+  assert.ok(stylesheetIndex >= 0, "generated page must include its stylesheet");
+  assert.ok(
+    themeScriptIndex < stylesheetIndex,
+    "theme restore must run before the first stylesheet",
+  );
+
+  const scriptStart = head.lastIndexOf("<script", themeScriptIndex);
+  const scriptOpen = head.slice(scriptStart, head.indexOf(">", scriptStart) + 1);
+  assert.doesNotMatch(scriptOpen, /type=["']module["']/);
+  assert.match(layout, /<head>\s*<script\s+is:inline>/s);
+  assert.match(layout, /localStorage\.getItem\(["']dlc-blog-theme["']\)/);
+  assert.doesNotMatch(header, /localStorage\.getItem/);
+});
+
+test("keeps Catppuccin Latte code tokens on their readable Shiki background", async () => {
+  const [css, hello] = await Promise.all([
+    readProjectFile("apps/blog/src/styles/global.css"),
+    readBuiltFile("blog/hello-dlc-space/index.html"),
+  ]);
+  const preRule = css.match(/pre:has\(code\)\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+
+  assert.doesNotMatch(preRule, /background[^;]*!important/);
+  assert.match(
+    hello,
+    /class="astro-code catppuccin-latte"[^>]+style="background-color:#eff1f5;color:#4c4f69/,
+  );
 });
