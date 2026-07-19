@@ -8,12 +8,14 @@ interface Props {
   title?: string;
   description?: string;
   image?: ImageMetadata;
+  pageKind?: "index" | "article";
 }
 
 const {
   title = SITE_TITLE,
   description = SITE_DESCRIPTION,
   image = FallbackImage,
+  pageKind = "article",
 } = Astro.props;
 ---
 
@@ -39,9 +41,11 @@ const {
     <Head title={title} description={description} image={image} />
   </head>
   <body>
-    <div class="dlc-shell mx-auto w-full max-w-2xl px-6 py-12 md:py-16">
+    <div class:list={["site-frame", `page-${pageKind}`]}>
       <Header />
-      <slot />
+      <div class="site-content">
+        <slot />
+      </div>
     </div>
   </body>
 </html>

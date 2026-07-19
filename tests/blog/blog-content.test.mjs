@@ -230,3 +230,41 @@ test("keeps Catppuccin Latte code tokens on their readable Shiki background", as
     /class="astro-code catppuccin-latte"[^>]+style="background-color:#eff1f5;color:#4c4f69/,
   );
 });
+
+test("uses a wide desktop sidebar, tag filters, and a responsive article timeline", async () => {
+  const [layout, header, index, css] = await Promise.all([
+    readProjectFile("apps/blog/src/layouts/Layout.astro"),
+    readProjectFile("apps/blog/src/components/Header.astro"),
+    readProjectFile("apps/blog/src/pages/index.astro"),
+    readProjectFile("apps/blog/src/styles/global.css"),
+  ]);
+
+  assert.match(layout, /pageKind\?:\s*"index"\s*\|\s*"article"/);
+  assert.match(layout, /site-frame/);
+  assert.match(layout, /site-content/);
+  assert.doesNotMatch(layout, /max-w-2xl/);
+
+  assert.match(header, /desktop-sidebar/);
+  assert.match(header, /mobile-header/);
+  assert.match(header, /href="\/blog\/about-dlc-space\/"/);
+  assert.match(header, /querySelectorAll<HTMLButtonElement>\("\.theme-toggle"\)/);
+  assert.doesNotMatch(header, /◐/, "主题切换不得使用文字符号冒充图标");
+
+  assert.match(index, /<Layout\s+pageKind="index">/);
+  assert.match(index, /class="tag-filter"/);
+  assert.match(index, /aria-pressed=/);
+  assert.match(index, /data-tags=/);
+  assert.match(index, /class="timeline-year"/);
+  assert.match(index, /class="timeline-entry"/);
+  assert.match(index, /href=\{`\/blog\/\$\{post\.id\}\/`\}/);
+  assert.match(index, /JSON\.parse/);
+  assert.doesNotMatch(index, /<li[^>]+\shidden(?:=|\s|>)/, "文章默认必须在无 JavaScript 时可见");
+
+  assert.match(css, /max-width:\s*90rem/);
+  assert.match(css, /grid-template-columns:\s*15\.5rem minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.desktop-sidebar[\s\S]*position:\s*sticky/);
+  assert.match(css, /\.page-article[\s\S]*max-width:\s*47\.5rem/);
+  assert.match(css, /\.tag-filter/);
+  assert.match(css, /\.timeline-entry/);
+  assert.match(css, /@media\s*\(max-width:\s*64rem\)/);
+});

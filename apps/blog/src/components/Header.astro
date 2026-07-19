@@ -1,12 +1,33 @@
-<header class="site-header mb-16">
-  <a class="brand-link no-underline" href="/" aria-label="DLC 空间博客首页">
-    <img src="/dlc-logo.svg" alt="DLC 空间" width="44" height="44" />
-    <span>DLC 空间</span>
+---
+const currentPath = Astro.url.pathname;
+const isAbout = currentPath === "/blog/about-dlc-space/";
+---
+
+<aside class="desktop-sidebar" aria-label="博客侧栏">
+  <a class="sidebar-brand no-underline" href="/" aria-label="DLC 空间博客首页">
+    <img src="/dlc-logo.svg" alt="DLC 空间" width="52" height="52" />
+    <span>
+      <strong>DLC 空间</strong>
+      <small>个人博客</small>
+    </span>
   </a>
 
-  <nav class="site-nav" aria-label="主要导航">
-    <a href="/">博客</a>
-    <a href="/blog/about-dlc-space/">关于</a>
+  <nav class="sidebar-nav" aria-label="主要导航">
+    <a class:list={["sidebar-link", { "is-active": !isAbout }]} href="/">
+      <span class="nav-mark" aria-hidden="true">01</span>
+      <span>博客文章</span>
+    </a>
+    <a
+      class:list={["sidebar-link", { "is-active": isAbout }]}
+      href="/blog/about-dlc-space/"
+    >
+      <span class="nav-mark" aria-hidden="true">02</span>
+      <span>关于本站</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <p>记录技术实践、阅读与自托管生活。</p>
     <button
       id="theme-toggle"
       class="theme-toggle"
@@ -14,7 +35,27 @@
       aria-label="切换到浅色阅读模式"
       aria-pressed="false"
     >
-      <span aria-hidden="true">◐</span>
+      <span class="theme-toggle-label">浅色模式</span>
+    </button>
+  </div>
+</aside>
+
+<header class="mobile-header">
+  <a class="brand-link no-underline" href="/" aria-label="DLC 空间博客首页">
+    <img src="/dlc-logo.svg" alt="DLC 空间" width="44" height="44" />
+    <span>DLC 空间</span>
+  </a>
+
+  <nav class="site-nav" aria-label="移动端导航">
+    <a href="/">博客</a>
+    <a href="/blog/about-dlc-space/">关于</a>
+    <button
+      id="theme-toggle-mobile"
+      class="theme-toggle"
+      type="button"
+      aria-label="切换到浅色阅读模式"
+      aria-pressed="false"
+    >
       <span class="theme-toggle-label">浅色</span>
     </button>
   </nav>
@@ -23,32 +64,45 @@
 <script>
   const storageKey = "dlc-blog-theme";
   const root = document.documentElement;
-  const themeToggle =
-    document.querySelector<HTMLButtonElement>("#theme-toggle");
-  const themeLabel = themeToggle?.querySelector<HTMLElement>(
-    ".theme-toggle-label",
-  );
+  const themeToggles =
+    document.querySelectorAll<HTMLButtonElement>(".theme-toggle");
 
   const applyTheme = (theme: "dark" | "light") => {
     root.dataset.theme = theme;
     const isLight = theme === "light";
-    themeToggle?.setAttribute("aria-pressed", String(isLight));
-    themeToggle?.setAttribute(
-      "aria-label",
-      isLight ? "切换到深色阅读模式" : "切换到浅色阅读模式",
-    );
-    if (themeLabel) themeLabel.textContent = isLight ? "深色" : "浅色";
+    themeToggles.forEach((themeToggle) => {
+      const themeLabel = themeToggle.querySelector<HTMLElement>(
+        ".theme-toggle-label",
+      );
+      themeToggle.setAttribute("aria-pressed", String(isLight));
+      themeToggle.setAttribute(
+        "aria-label",
+        isLight ? "切换到深色阅读模式" : "切换到浅色阅读模式",
+      );
+      if (themeLabel) {
+        const isSidebarLabel = themeLabel.textContent?.includes("模式");
+        themeLabel.textContent = isLight
+          ? isSidebarLabel
+            ? "深色模式"
+            : "深色"
+          : isSidebarLabel
+            ? "浅色模式"
+            : "浅色";
+      }
+    });
   };
 
   applyTheme(root.dataset.theme === "light" ? "light" : "dark");
 
-  themeToggle?.addEventListener("click", () => {
-    const nextTheme = root.dataset.theme === "light" ? "dark" : "light";
-    applyTheme(nextTheme);
-    try {
-      localStorage.setItem(storageKey, nextTheme);
-    } catch {
-      // The in-page theme still works when persistence is unavailable.
-    }
+  themeToggles.forEach((themeToggle) => {
+    themeToggle.addEventListener("click", () => {
+      const nextTheme = root.dataset.theme === "light" ? "dark" : "light";
+      applyTheme(nextTheme);
+      try {
+        localStorage.setItem(storageKey, nextTheme);
+      } catch {
+        // The in-page theme still works when persistence is unavailable.
+      }
+    });
   });
 </script>

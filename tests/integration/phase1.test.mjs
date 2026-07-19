@@ -191,7 +191,7 @@ test("博客、起始页与 Compose 关键契约可从单条本地命令验收",
   );
 
   assert.equal(stderr, "");
-  assert.equal(expectedTestCount, 43);
+  assert.equal(expectedTestCount, 44);
   assert.match(stdout, new RegExp(`tests ${expectedTestCount}\\b`));
   assert.match(stdout, /fail 0/);
   assert.match(stdout, /records the exact Miniblog upstream revision/);
