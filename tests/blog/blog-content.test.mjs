@@ -102,7 +102,7 @@ test("provides branded, keyboard-operable navigation and theme control", async (
 
   assert.match(header, /<img[^>]+src=["']\/dlc-logo\.svg["'][^>]+alt=["']DLC \u7a7a间["']/s);
   assert.match(header, /href=["']\/["'][^>]*>\s*\u535a客\s*</s);
-  assert.match(header, /href=["']\/blog\/about-dlc-space["'][^>]*>\s*\u5173于\s*</s);
+  assert.match(header, /href=["']\/blog\/about-dlc-space\/["'][^>]*>\s*\u5173于\s*</s);
   assert.match(header, /<button[^>]+id=["']theme-toggle["'][^>]+aria-label=/s);
   assert.match(header, /localStorage/);
   assert.doesNotMatch(header, /localStorage\.getItem/);
@@ -149,6 +149,9 @@ test("builds both DLC articles, RSS entries, and canonical URLs", async () => {
   assert.match(index, /DLC 空间/);
   assert.doesNotMatch(index, /Miniblog is|Today|Writing|Projects/);
   assert.match(index, /#DLC/);
+  assert.match(index, /href="\/blog\/about-dlc-space\/"/);
+  assert.match(index, /href="\/blog\/hello-dlc-space\/"/);
+  assert.doesNotMatch(index, /href="\/blog\/(?:about|hello)-dlc-space"/);
   assert.match(about, /#DLC/);
   assert.match(hello, /#开始/);
   assert.doesNotMatch(rss, /customizing-miniblog|making-miniblog|what-is-markdown/);
