@@ -1,0 +1,20 @@
+services:
+  web:
+    container_name: dlc-web
+    build: .
+    ports:
+      - "${WEB_PORT:-3104}:80"
+    restart: unless-stopped
+    volumes:
+      - "${DLC_DATA_ROOT}/web/data:/var/www/html/data"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
