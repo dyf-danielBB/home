@@ -1,33 +1,23 @@
 <template>
   <footer>
     <div class="copyright">
-      <n-text class="description" v-html="packageJson.description" />
-      <n-text
-        class="author"
-        :depth="3"
-        v-html="packageJson.author"
-        @click="jumpLink(packageJson.github)"
-      />
+      <n-text class="description">
+        Copyright &copy;
+        <span v-if="startYear < fullYear">{{ startYear }} - </span>{{ fullYear }}
+        <a class="author-link" href="https://home.dailecheng.xyz" target="_blank">dyf</a>
+        &amp; Made by dyf
+      </n-text>
     </div>
-    <n-text
-      v-if="icp"
-      :depth="3"
-      class="icp"
-      v-html="icp"
-      @click="jumpLink('https://beian.miit.gov.cn/')"
-    />
+    <n-text v-if="icp" :depth="3" class="icp">
+      <a class="author-link" href="https://beian.miit.gov.cn/" target="_blank">{{ icp }}</a>
+    </n-text>
   </footer>
 </template>
 
 <script setup>
-import packageJson from "@/../package.json";
-
+const fullYear = new Date().getFullYear();
+const startYear = 2026;
 const icp = ref(import.meta.env.VITE_ICP ? import.meta.env.VITE_ICP : null);
-
-// 链接跳转
-const jumpLink = (url) => {
-  window.open(url);
-};
 </script>
 
 <style lang="scss" scoped>
@@ -42,15 +32,10 @@ footer {
   justify-content: center;
   .copyright {
     margin-bottom: 4px;
-    .description {
-      &::after {
-        content: "@ Copyright By";
-        margin: 0 6px;
-      }
-    }
   }
-  .author {
-    cursor: pointer;
+  .author-link {
+    color: inherit;
+    text-decoration: none;
     transition: all 0.3s;
     &:hover {
       color: var(--n-code-text-color);
