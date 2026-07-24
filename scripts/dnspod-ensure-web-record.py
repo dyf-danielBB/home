@@ -33,7 +33,9 @@ def call(sid, skey, action, payload):
         return json.loads(r.read())
 
 sid, skey = load_cred(os.path.expanduser("~/.acme.sh/account.conf"))
-DOMAIN, SUB, IP = "dailecheng.xyz", "web", "124.221.177.197"
+DOMAIN = "dailecheng.xyz"
+SUB = sys.argv[1] if len(sys.argv) > 1 else "web"
+IP = sys.argv[2] if len(sys.argv) > 2 else "124.221.177.197"
 
 resp = call(sid, skey, "DescribeRecordList", {"Domain": DOMAIN, "Subdomain": SUB})
 err = resp.get("Response", {}).get("Error")
