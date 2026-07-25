@@ -1,0 +1,51 @@
+---
+import Head from "../components/Head.astro";
+import FallbackImage from "../assets/blog-placeholder-1.jpg";
+import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
+import Header from "../components/Header.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: ImageMetadata;
+  pageKind?: "index" | "article";
+}
+
+const {
+  title = SITE_TITLE,
+  description = SITE_DESCRIPTION,
+  image = FallbackImage,
+  pageKind = "article",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <script is:inline>
+      (() => {
+        const root = document.documentElement;
+        let theme = "dark";
+
+        try {
+          if (localStorage.getItem("dlc-blog-theme") === "light") {
+            theme = "light";
+          }
+        } catch {
+          // The deep-sea default remains available when storage is blocked.
+        }
+
+        root.dataset.theme = theme;
+      })();
+    </script>
+    <Head title={title} description={description} image={image} />
+  </head>
+  <body>
+    <div class:list={["site-frame", `page-${pageKind}`]}>
+      <Header />
+      <div class="site-content">
+        <slot />
+      </div>
+    </div>
+  </body>
+</html>

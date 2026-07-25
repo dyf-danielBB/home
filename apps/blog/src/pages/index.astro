@@ -1,0 +1,109 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getCollection } from "astro:content";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+const tags = [...new Set(posts.flatMap((post) => post.data.tags))];
+const postsByYear = posts.reduce((groups, post) => {
+  const year = post.data.date.getUTCFullYear();
+  const group = groups.get(year) ?? [];
+  group.push(post);
+  groups.set(year, group);
+  return groups;
+}, new Map<number, typeof posts>());
+const formatDate = (date: Date) =>
+  date
+    .toLocaleDateString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "UTC",
+    })
+    .replaceAll("/", "-");
+---
+
+<Layout pageKind="index">
+  <main class="blog-index">
+    <section class="index-intro" aria-labelledby="blog-title">
+      <p class="eyebrow">DLC JOURNAL</p>
+      <h1 id="blog-title">博客文章</h1>
+      <p>
+        记录技术实践、个人项目、阅读和自托管生活。这里保持安静、清晰，也留一点深海极光。
+      </p>
+    </section>
+
+    <div class="tag-toolbar" aria-label="按标签筛选文章">
+      <button
+        class="tag-filter"
+        type="button"
+        data-tag="全部"
+        aria-pressed="true">全部</button
+      >
+      {
+        tags.map((tag) => (
+          <button
+            class="tag-filter"
+            type="button"
+            data-tag={tag}
+            aria-pressed="false"
+          >
+            {tag}
+          </button>
+        ))
+      }
+    </div>
+
+    <div class="timeline" aria-live="polite">
+      {
+        [...postsByYear.entries()].map(([year, yearPosts]) => (
+          <section class="timeline-year" aria-labelledby={`year-${year}`}>
+            <div class="year-heading">
+              <h2 id={`year-${year}`}>{year}</h2>
+              <span>{yearPosts.length} 篇文章</span>
+            </div>
+            <ol class="timeline-list">
+              {yearPosts.map((post) => (
+                <li
+                  class="timeline-entry"
+                  data-tags={JSON.stringify(post.data.tags)}
+                >
+                  <time datetime={post.data.date.toISOString()}>
+                    {formatDate(post.data.date)}
+                  </time>
+                  <span class="timeline-node" aria-hidden="true" />
+                  <a class="timeline-link" href={`/blog/${post.id}/`}>
+                    <strong>{post.data.title}</strong>
+                    <span>{post.data.description}</span>
+                    <small>
+                      {post.data.tags.map((tag) => `#${tag}`).join("  ")}
+                    </small>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))
+      }
+    </div>
+  </main>
+</Layout>
+
+<script>
+  const filters = document.querySelectorAll<HTMLButtonElement>(".tag-filter");
+  const entries = document.querySelectorAll<HTMLElement>(".timeline-entry");
+
+  filters.forEach((filter) => {
+    filter.addEventListener("click", () => {
+      const selectedTag = filter.dataset.tag ?? "全部";
+      filters.forEach((item) =>
+        item.setAttribute("aria-pressed", String(item === filter)),
+      );
+      entries.forEach((entry) => {
+        const entryTags = JSON.parse(entry.dataset.tags ?? "[]") as string[];
+        entry.hidden =
+          selectedTag !== "全部" && !entryTags.includes(selectedTag);
+      });
+    });
+  });
+</script>

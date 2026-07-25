@@ -1,0 +1,12 @@
+services:
+  blog:
+    container_name: dlc-blog
+    build: .
+    ports:
+      - "${BLOG_PORT:-3101}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

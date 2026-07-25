@@ -1,0 +1,45 @@
+services:
+  homepage:
+    container_name: dlc-nav
+    image: ghcr.io/gethomepage/homepage:v1.13.1
+    restart: unless-stopped
+    environment:
+      - HOMEPAGE_ALLOWED_HOSTS=nav.dailecheng.xyz
+      - HOMEPAGE_VAR_LATITUDE=${HOMEPAGE_VAR_LATITUDE:-31.2304}
+      - HOMEPAGE_VAR_LONGITUDE=${HOMEPAGE_VAR_LONGITUDE:-121.4737}
+    ports:
+      - "127.0.0.1:${NAV_PORT:-3103}:3000"
+    volumes:
+      - ./config:/app/config:ro
+      - ./config/icons:/app/public/icons:ro
+      - dlc-nav-logs:/app/config/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  nav-auth:
+    container_name: dlc-nav-auth
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      NAV_USERNAME: "${NAV_USERNAME:?请设置 NAV_USERNAME}"
+      NAV_PASSWORD_HASH: "${NAV_PASSWORD_HASH:?请设置 NAV_PASSWORD_HASH}"
+    ports:
+      - "${NAV_AUTH_BIND_ADDRESS:-127.0.0.1}:${NAV_AUTH_PORT:-3105}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      homepage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  dlc-nav-logs:

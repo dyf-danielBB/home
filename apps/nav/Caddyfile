@@ -1,0 +1,9 @@
+:80 {
+  basic_auth {
+    {$NAV_USERNAME} {$NAV_PASSWORD_HASH}
+  }
+
+  reverse_proxy homepage:3000 {
+    header_up Host nav.dailecheng.xyz
+  }
+}

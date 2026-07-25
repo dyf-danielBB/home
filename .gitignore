@@ -22,6 +22,10 @@ __pycache__/
 !.vscode/extensions.json
 .idea
 .worktrees/
+data/
+deploy/.env
+apps/**/data/
+apps/**/.env
 .DS_Store
 *.suo
 *.ntvs*

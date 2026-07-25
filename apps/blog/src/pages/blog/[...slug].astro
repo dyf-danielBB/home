@@ -1,0 +1,30 @@
+---
+import { type CollectionEntry, getCollection, render } from "astro:content";
+import Layout from "../../layouts/Layout.astro";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog");
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: post,
+  }));
+}
+
+type Props = CollectionEntry<"blog">;
+
+const post = Astro.props;
+const { Content } = await render(post);
+---
+
+<Layout
+  title={post.data.title}
+  description={post.data.description}
+  image={post.data.image}
+>
+  <main>
+    <div class="mb-6 flex flex-wrap gap-2" aria-label="文章标签">
+      {post.data.tags.map((tag) => <span class="text-muted-foreground text-sm">#{tag}</span>)}
+    </div>
+    <Content />
+  </main>
+</Layout>

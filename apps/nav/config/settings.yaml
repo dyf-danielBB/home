@@ -1,0 +1,11 @@
+title: DLC 空间
+description: 个人数字空间的私有起始页
+language: zh-Hans
+theme: dark
+color: cyan
+headerStyle: boxedWidgets
+useEqualHeights: true
+layout:
+  DLC 空间:
+    style: row
+    columns: 3
