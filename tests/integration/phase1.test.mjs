@@ -142,12 +142,12 @@ function assertNoRealSecrets(path, text) {
   }
 }
 
-test("主页保留其他链接且四个 DLC 入口各有唯一 URL", async () => {
+test("主页保留最新入口且四个目标链接各有唯一 URL", async () => {
   const links = JSON.parse(await readProjectFile("src/assets/siteLinks.json"));
   const expectedEntries = new Map([
     ["博客", "https://blog.dailecheng.xyz/"],
     ["网盘", "https://pan.dailecheng.xyz/"],
-    ["起始页", "https://nav.dailecheng.xyz/"],
+    ["相册集", "https://me.dailecheng.xyz/"],
     ["网址集", "https://web.dailecheng.xyz/"],
   ]);
 
