@@ -189,7 +189,7 @@ git diff --check
 
 Expected: 所有适用测试通过，生产构建成功，最终工作区没有未提交的空白错误。
 
-- [ ] **Step 4: 推送最终 dev**
+- [x] **Step 4: 推送最终 dev**
 
 ```bash
 git push origin dev
@@ -197,7 +197,7 @@ git push origin dev
 
 Expected: `origin/dev` 更新到最终 merge commit；不得使用 `--force`。
 
-- [ ] **Step 5: 保留回退点并记录线上发布边界**
+- [x] **Step 5: 保留回退点并记录线上发布边界**
 
 记录合并前 `origin/dev` 提交：
 
@@ -206,3 +206,5 @@ git rev-parse HEAD^1
 ```
 
 Expected: 得到可恢复的完整提交 SHA。Git 推送完成不代表主页或子站已经上线；任何线上发布必须分别遵循主页发布工作流和各 DLC 子站部署文档。
+
+本次整合前的 `origin/dev` 回退点为 `f3d56e25551662e3afe7e8041c2f7a29fda62142`。
