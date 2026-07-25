@@ -117,13 +117,13 @@ function assertSafeRollback(readme) {
   assert.doesNotMatch(readme, /<上一稳定提交>/, "不得使用会被 shell 解释为重定向的裸占位");
 }
 
-test("总 Compose 只编排博客、起始页与认证网关", () => {
+test("总 Compose 编排博客、起始页、认证网关与网址集", () => {
   const compose = parseYaml(composePath);
 
   assertExactKeys(compose, ["services", "volumes"], "Compose 顶层");
-  assert.deepEqual(Object.keys(compose.services).sort(), ["dlc-blog", "dlc-nav", "dlc-nav-auth"]);
+  assert.deepEqual(Object.keys(compose.services).sort(), ["dlc-blog", "dlc-nav", "dlc-nav-auth", "dlc-web"]);
   assert.deepEqual(compose.volumes, { "dlc-nav-logs": null });
-  assert.doesNotMatch(JSON.stringify(compose), /(?:^|[-_])(pan|web)(?:$|[-_])/i);
+  assert.doesNotMatch(JSON.stringify(compose), /(?:^|[-_])pan(?:$|[-_])/i);
 });
 
 test("博客构建路径、公开端口和运行策略精确固定", () => {
