@@ -67,9 +67,29 @@ export const getWeather = async (key, city) => {
   return await res.json();
 };
 
-// 获取教书先生天气 API
-// https://api.oioweb.cn/doc/weather/GetWeather
-export const getOtherWeather = async () => {
-  const res = await fetch("https://api.oioweb.cn/api/weather/GetWeather");
+// 获取 Open-Meteo 天气 API
+export const getOtherWeather = async (latitude = "31.2990", longitude = "120.5853") => {
+  const url = new URL("https://api.open-meteo.com/v1/forecast");
+  url.searchParams.set("latitude", latitude);
+  url.searchParams.set("longitude", longitude);
+  url.searchParams.set("current", "temperature_2m,weather_code,wind_direction_10m,wind_speed_10m");
+  url.searchParams.set("timezone", "Asia/Shanghai");
+  const res = await fetch(url);
+  return await res.json();
+};
+
+// 获取 IP 粗略位置信息
+export const getIpLocation = async () => {
+  const res = await fetch("https://ipwho.is/");
+  return await res.json();
+};
+
+// 根据经纬度反查城市
+export const getGeoLocationName = async (latitude, longitude) => {
+  const url = new URL("https://api.bigdatacloud.net/data/reverse-geocode-client");
+  url.searchParams.set("latitude", latitude);
+  url.searchParams.set("longitude", longitude);
+  url.searchParams.set("localityLanguage", "zh");
+  const res = await fetch(url);
   return await res.json();
 };

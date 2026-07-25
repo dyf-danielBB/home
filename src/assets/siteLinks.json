@@ -12,12 +12,12 @@
   {
     "icon": "CompactDisc",
     "name": "音乐",
-    "link": "https://music.imsyy.top/"
+    "link": "https://audio.dailecheng.xyz/"
   },
   {
     "icon": "Compass",
-    "name": "起始页",
-    "link": "https://nav.dailecheng.xyz/"
+    "name": "相册集",
+    "link": "https://me.dailecheng.xyz/"
   },
   {
     "icon": "Book",
@@ -27,11 +27,6 @@
   {
     "icon": "Fire",
     "name": "今日热榜",
-    "link": "https://hot.imsyy.top/"
-  },
-  {
-    "icon": "LaptopCode",
-    "name": "站点监测",
-    "link": "https://status.imsyy.top/"
+    "link": "https://hot.dailecheng.xyz/"
   }
 ]

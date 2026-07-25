@@ -6,19 +6,22 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.pnpm-store/
 
 node_modules
 dist
 dist-ssr
 *.local
 .env
+__pycache__/
+*.py[cod]
+.superpowers/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .worktrees/
-.superpowers/
 data/
 deploy/.env
 apps/**/data/
