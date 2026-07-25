@@ -157,7 +157,7 @@ Expected: 本次未提交改动没有空白错误；敏感扫描无匹配。固�
 - Consumes: Task 2 已完整验证的 `codex/dlc-subsites`。
 - Produces: 包含主页与 DLC 子站全部工作的 `dev` 和 `origin/dev`。
 
-- [ ] **Step 1: 最后确认两个分支状态**
+- [x] **Step 1: 最后确认两个分支状态**
 
 ```bash
 git status --short --branch
@@ -168,7 +168,7 @@ git log -1 --oneline codex/dlc-subsites
 
 Expected: 两个工作区干净，提交均为预期版本。
 
-- [ ] **Step 2: 非快进合并 DLC 分支**
+- [x] **Step 2: 非快进合并 DLC 分支**
 
 ```bash
 git switch dev
@@ -177,7 +177,7 @@ git merge --no-ff codex/dlc-subsites
 
 Expected: 合并完成且不再出现内容冲突。
 
-- [ ] **Step 3: 在最终 dev 上重新运行关键验证**
+- [x] **Step 3: 在最终 dev 上重新运行关键验证**
 
 ```bash
 pnpm build

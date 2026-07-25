@@ -28,9 +28,13 @@ before(async () => {
   }
   assert.ok(acquired, "等待另一个 Astro 构建结束超时");
   try {
-    await execFileAsync("pnpm", ["--dir", "apps/blog", "build"], {
-      cwd: fileURLToPath(projectDirectory),
-    });
+    await execFileAsync(
+      "pnpm",
+      ["--ignore-workspace", "--config.verifyDepsBeforeRun=false", "--dir", "apps/blog", "build"],
+      {
+        cwd: fileURLToPath(projectDirectory),
+      },
+    );
   } finally {
     await rm(lockDirectory, { recursive: true, force: true });
   }

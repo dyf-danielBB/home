@@ -6,12 +6,6 @@
   "private": true,
   "version": "4.1.4",
   "type": "module",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "vue-demi"
-    ]
-  },
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
